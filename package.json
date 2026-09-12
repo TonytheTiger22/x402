@@ -1,0 +1,33 @@
+{
+  "name": "x402",
+  "version": "1.0.0",
+  "description": "",
+  "main": "payment-agent.js",
+  "scripts": {
+    "start": "node payment-agent.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TonytheTiger22/x402.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/TonytheTiger22/x402/issues"
+  },
+  "homepage": "https://github.com/TonytheTiger22/x402#readme",
+  "dependencies": {
+    "@x402/core": "^2.22.0",
+    "@x402/evm": "^2.22.0",
+    "@x402/express": "^2.22.0",
+    "@x402/fetch": "^2.22.0",
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.2.1",
+    "fast-xml-parser": "^5.11.1",
+    "pg": "^8.23.0",
+    "viem": "^2.55.18"
+  }
+}

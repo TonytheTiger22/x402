@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Screen anyone against global sanctions lists — 2¢ per check</title>
+<style>
+ :root{--ink:#16191d;--dim:#5f6a75;--line:#e0e4e9;--go:#1a7f4b;--stop:#b3261e;--brand:#1a2634}
+ *{box-sizing:border-box}
+ body{margin:0;background:#fff;color:var(--ink);
+      font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif}
+ .hero{background:var(--brand);color:#fff;padding:64px 20px 56px;text-align:center}
+ .hero h1{font-size:clamp(28px,4vw,42px);margin:0 0 14px;letter-spacing:-.02em;line-height:1.15}
+ .hero p{color:#c3cbd3;font-size:18px;max-width:560px;margin:0 auto;line-height:1.5}
+ .badge{display:inline-block;background:rgba(255,255,255,.12);color:#fff;font-size:12.5px;
+        font-weight:600;letter-spacing:.03em;padding:5px 13px;border-radius:20px;margin-bottom:18px}
+ main{max-width:640px;margin:0 auto;padding:0 20px 90px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:15px;
+       box-shadow:0 1px 3px rgba(0,0,0,.04);padding:26px;margin-top:-30px;position:relative;
+       margin-bottom:20px}
+ label{display:block;font-size:13px;font-weight:600;color:var(--dim);margin:14px 0 6px}
+ label:first-child{margin-top:0}
+ input,select{width:100%;font:inherit;padding:12px 14px;border:2px solid var(--line);
+              border-radius:9px;background:#fff}
+ input:focus,select:focus{outline:none;border-color:var(--brand)}
+ .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+ .examples{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
+ .ex{font-size:13px;background:#f2f4f6;border:1px solid var(--line);color:var(--dim);
+     padding:6px 12px;border-radius:20px;cursor:pointer}
+ .ex:hover{background:#eaedf0}
+ button{font:inherit;font-weight:650;border:0;border-radius:10px;padding:15px 20px;cursor:pointer}
+ .go{background:var(--brand);color:#fff;width:100%;margin-top:18px;font-size:16px}
+ .go:disabled{opacity:.5;cursor:default}
+ .g{background:#fff;border:2px solid var(--line);color:var(--dim);padding:8px 14px;font-size:13px}
+ .price{font-size:13px;color:var(--dim);text-align:center;margin-top:9px}
+ .result{margin-top:20px}
+ .banner{border-radius:11px;padding:15px 17px;font-size:16px;font-weight:600;margin-bottom:12px}
+ .banner.ok{background:#e6f4ec;color:#12603a}
+ .banner.warn{background:#fdf3e3;color:#a4600a}
+ .kv{display:flex;justify-content:space-between;padding:6px 0;font-size:14.5px;gap:14px}
+ .kv span:first-child{color:var(--dim)}
+ .kv b{text-align:right;word-break:break-word}
+ table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+ th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--dim);font-weight:600;padding:7px;border-bottom:1px solid var(--line)}
+ td{padding:8px 7px;border-bottom:1px solid #eef1f4;vertical-align:top}
+ tr.no td{background:#fff6f5}
+ .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+ .tag.y{background:#e6f4ec;color:var(--go)}.tag.n{background:#fdeceb;color:var(--stop)}
+ .tag.p{background:#fdf3e3;color:#a4600a}.tag.u{background:#eef1f4;color:var(--dim)}
+ .fnote{display:block;font-size:11px;color:var(--dim);margin-top:2px;font-weight:400}
+ .meta{font-size:12.5px;color:var(--dim);margin-top:8px;line-height:1.5}
+ code{font:12px ui-monospace,Menlo,monospace;background:#f2f4f6;padding:1px 5px;border-radius:4px}
+ .foot{text-align:center;margin-top:30px;padding-top:24px;border-top:1px solid var(--line)}
+ .foot p{color:var(--dim);font-size:14px;margin:0 0 14px}
+ a{color:#1858c4}
+ .err{color:var(--stop);font-size:14px;margin-top:10px}
+</style></head><body>
+
+<div class="hero">
+ <span class="badge">LIVE DEMO &middot; BASE SEPOLIA TESTNET</span>
+ <h1>Screen anyone against global<br>sanctions lists. For 2&cent;.</h1>
+ <p>No account. No contract. Pay per check, get a result in seconds &mdash;
+    with a timestamped record you can hand to an auditor.</p>
+</div>
+
+<main>
+ <div class="card">
+  <label>Full name <span style="color:var(--stop)">*</span></label>
+  <input id="name" placeholder="e.g. Jane Doe">
+
+  <div class="grid2">
+   <div>
+    <label>Nationality</label>
+    <input id="country" placeholder="e.g. Portugal">
+   </div>
+   <div>
+    <label>Date of birth</label>
+    <input id="dob" type="date">
+   </div>
+  </div>
+
+  <label>Entity type</label>
+  <select id="type">
+   <option>Individual</option>
+   <option>Entity</option>
+  </select>
+
+  <div class="examples">
+   <span class="ex" id="ex-clean">Try a clean name</span>
+   <span class="ex" id="ex-hit">Try a sanctioned name</span>
+  </div>
+
+  <button class="go" id="go">Screen this subject</button>
+  <div class="price">Costs 2&cent; &middot; settles on-chain in about 2 seconds</div>
+  <div id="err" class="err"></div>
+ </div>
+
+ <div id="result" class="result"></div>
+
+ <div class="foot">
+  <p>This is a real, working API &mdash; not a mockup. Every check above just paid for
+     itself and settled on Base Sepolia.</p>
+  <a href="mailto:hello@example.com?subject=Sanctions%20screening%20API"><button class="g">Get API access &rarr;</button></a>
+  <span style="display:inline-block;width:10px"></span>
+  <a href="/"><button class="g">See the full review workflow &rarr;</button></a>
+ </div>
+</main>
+
+<script>
+const $=(i)=>document.getElementById(i);
+
+$("ex-clean").onclick=()=>{
+ $("name").value="Maria Santos Oliveira"; $("country").value="Portugal";
+ $("dob").value="1981-04-12"; $("type").value="Individual";
+};
+$("ex-hit").onclick=()=>{
+ $("name").value="Viktor Petrov"; $("country").value="Bulgaria";
+ $("dob").value="1978-09-03"; $("type").value="Individual";
+};
+
+const STATUS_TAG={match:['y','agrees'],partial:['p','partial'],differs:['n','differs'],unknown:['u','no data']};
+function comparisonTable(fields){
+ const rows=fields.map(f=>{
+   const st=f.status||(f.agree?'match':'differs');
+   const [cls,label]=STATUS_TAG[st]||STATUS_TAG.unknown;
+   return '<tr class="'+(st==='differs'?'no':'')+'"><td>'+f.field+'</td><td>'
+    +f.subject+'</td><td>'+f.listed+'</td><td><span class="tag '+cls+'">'+label+'</span>'
+    +(f.note?'<span class="fnote">'+f.note+'</span>':'')+'</td></tr>';
+ }).join('');
+ return '<table><tr><th>Field</th><th>You entered</th><th>Listed party</th><th></th></tr>'+rows+'</table>';
+}
+
+$("go").onclick=async()=>{
+ const name=$("name").value.trim();
+ $("err").textContent="";
+ if(!name){$("err").textContent="Enter a name to screen.";return;}
+
+ $("go").disabled=true; $("go").textContent="Screening\u2026 paying as it goes.";
+ $("result").innerHTML="";
+
+ try{
+  const res=await fetch("/api/screen-free",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name, country:$("country").value.trim(),
+                          dob:$("dob").value, type:$("type").value})});
+  const r=await res.json();
+
+  if(!r.ok){$("err").textContent=r.error||"Something went wrong.";return;}
+
+  const cost=r.outcome==="hit"?"7\u00A2":"2\u00A2";
+  const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
+
+  if(r.outcome==="clear"){
+   $("result").innerHTML='<div class="banner ok">No match found across 4 lists.</div>'
+    +'<div class="card">'
+    +'<div class="kv"><span>Subject</span><b>'+r.screen.subject.name+'</b></div>'
+    +'<div class="kv"><span>Lists checked</span><b>'+r.screen.listsChecked.join(", ")+'</b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
+    +'<div class="meta">Recorded with a hash of the check facts, so this result cannot be '
+    +'backdated or altered after the fact. Try the sanctioned-name example above to see a match.</div>'
+    +'</div>';
+  } else {
+   $("result").innerHTML='<div class="banner warn">Possible match &mdash; '
+     +r.screen.hits[0].name+', '+r.screen.hits[0].list+', score '+r.screen.hits[0].score+'</div>'
+    +'<div class="card">'+comparisonTable(r.context.fields)
+    +'<div class="meta">'+r.context.meta.list+' '+r.context.meta.listVersion+' &middot; '
+      +r.context.meta.program+' &middot; matched on: '+r.context.meta.matchedOn+'</div></div>'
+    +'<div class="card">'
+    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
+    +'<div class="meta">This is a match result and a field comparison only. What you do with it '
+    +'&mdash; clear, escalate, hold a payment &mdash; is entirely your own process.</div></div>';
+  }
+ } catch(e){
+  $("err").textContent=String(e);
+ } finally {
+  $("go").disabled=false; $("go").textContent="Screen this subject";
+ }
+};
+</script>
+</body></html>

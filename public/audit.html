@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audit trail</title>
+<style>
+ :root{--ink:#16191d;--dim:#5f6a75;--line:#e0e4e9;--go:#1a7f4b;--stop:#b3261e}
+ *{box-sizing:border-box}
+ body{margin:0;background:#f5f7f9;color:var(--ink);
+      font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;
+      display:flex;justify-content:center;padding:32px 18px 90px}
+ main{width:100%;max-width:1000px}
+ h1{font-size:25px;margin:0 0 4px;letter-spacing:-.02em}
+ .sub{color:var(--dim);margin:0 0 22px;font-size:15px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:20px;margin-bottom:14px}
+ .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin-bottom:10px}
+ button{font:inherit;font-weight:640;border:0;border-radius:9px;padding:11px 18px;cursor:pointer}
+ .p{background:#1a2634;color:#fff}
+ .g{background:#fff;border:2px solid var(--line);color:var(--dim);padding:9px 15px}
+ .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+ table{width:100%;border-collapse:collapse;font-size:13.5px}
+ th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--dim);font-weight:600;padding:8px 7px;border-bottom:1px solid var(--line)}
+ td{padding:9px 7px;border-bottom:1px solid #eef1f4;vertical-align:top}
+ tr:hover td{background:#fafbfc;cursor:pointer}
+ code{font:12.5px ui-monospace,Menlo,monospace}
+ .pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+ .ok{background:#e6f4ec;color:var(--go)}
+ .warn{background:#fdf3e3;color:#a4600a}
+ .bad{background:#fdeceb;color:var(--stop)}
+ .grey{background:#eef1f4;color:var(--dim)}
+ .note{font-size:13px;color:var(--dim);margin-top:10px}
+ input{font:inherit;padding:10px 13px;border:2px solid var(--line);border-radius:9px;min-width:290px}
+ .kv{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;gap:16px}
+ .kv span:first-child{color:var(--dim)}
+ .kv b{text-align:right;word-break:break-all}
+ a{color:#1858c4}
+</style></head><body><main>
+<h1>Audit trail</h1>
+<p class="sub">Every check performed, with the list version and time it ran. Exportable.</p>
+
+<div class="card">
+ <div class="row">
+  <a href="/"><button class="g">&larr; Back to demo</button></a>
+  <button class="p" id="ex">Export CSV</button>
+  <button class="g" id="rf">Refresh</button>
+ </div>
+</div>
+
+<div class="card">
+ <div class="lbl">Verify a record has not been altered</div>
+ <div class="row">
+  <input id="ref" placeholder="CHK-20260818-XXXXXXXX">
+  <button class="p" id="vf">Verify</button>
+ </div>
+ <div id="vout"></div>
+</div>
+
+<div class="card">
+ <div class="lbl">Checks performed</div>
+ <div id="tbl">Loading&hellip;</div>
+ <div class="note">Click any row to see the full record and its hash.</div>
+</div>
+
+<div id="detail"></div>
+</main>
+<script>
+const $=(i)=>document.getElementById(i);
+const when=(s)=>new Date(s).toLocaleString("en-GB",{day:"2-digit",month:"short",
+                 hour:"2-digit",minute:"2-digit",second:"2-digit"});
+let rows=[];
+
+function pill(r){
+ if(r.hit_count===0) return '<span class="pill ok">no match</span>';
+ if(r.disposition==="cleared") return '<span class="pill ok">cleared</span>';
+ if(r.disposition==="escalated") return '<span class="pill bad">escalated</span>';
+ return '<span class="pill warn">open</span>';
+}
+
+function draw(){
+ if(!rows.length){$("tbl").innerHTML="No checks recorded yet. Run one from the demo.";return;}
+ $("tbl").innerHTML='<table><tr><th>Reference</th><th>Performed</th><th>Subject</th>'
+ +'<th>Your ref</th><th>List version</th><th>Hits</th><th>Status</th><th>Cost</th></tr>'
+ +rows.map((r,i)=>'<tr onclick="show('+i+')"><td><code>'+r.reference+'</code></td><td>'
+  +when(r.performed_at)+'</td><td>'+r.subject_name+'</td><td>'+(r.client_ref||"&mdash;")
+  +'</td><td><code>'+r.list_version+'</code></td><td>'+r.hit_count+'</td><td>'+pill(r)
+  +'</td><td>'+(r.price_paid?(r.price_paid*100).toFixed(0)+"\u00A2":"&mdash;")+'</td></tr>').join('')
+ +'</table>';
+}
+
+window.show=(i)=>{
+ const r=rows[i];
+ $("detail").innerHTML='<div class="card"><div class="lbl">Record '+r.reference+'</div>'
+ +Object.entries(r).map(([k,v])=>'<div class="kv"><span>'+k.replace(/_/g," ")+'</span><b>'
+   +(v===null?"&mdash;":(k==="payment_tx"&&v
+     ?'<a target="_blank" href="https://sepolia.basescan.org/tx/'+v+'">'+v.slice(0,20)+'\u2026</a>'
+     :String(v)))+'</b></div>').join('')
+ +'<div class="note">The record hash commits to the check facts only \u2014 not to the '
+ +'disposition, which may legitimately change later.</div></div>';
+ $("detail").scrollIntoView({behavior:"smooth"});
+};
+
+$("vf").onclick=async()=>{
+ const ref=$("ref").value.trim();
+ if(!ref) return;
+ const v=await(await fetch("/api/verify/"+encodeURIComponent(ref))).json();
+ if(!v.found){$("vout").innerHTML='<div class="note">No record with that reference.</div>';return;}
+ $("vout").innerHTML='<div class="note">'
+  +'<div class="kv"><span>Stored hash</span><b><code>'+v.stored.slice(0,26)+'\u2026</code></b></div>'
+  +'<div class="kv"><span>Recomputed now</span><b><code>'+v.recomputed.slice(0,26)+'\u2026</code></b></div>'
+  +'<div class="kv"><span>Result</span><b>'+(v.intact
+    ?'<span class="pill ok">intact</span>':'<span class="pill bad">altered</span>')+'</b></div>'
+  +'<div style="margin-top:10px">Canonical form hashed:</div>'
+  +'<code style="word-break:break-all">'+v.canonical+'</code></div>';
+};
+
+async function load(){rows=await(await fetch("/api/audit")).json();draw();}
+$("rf").onclick=load;
+$("ex").onclick=()=>location.href="/api/export";
+load();
+</script></body></html>

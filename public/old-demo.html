@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>x402 demo</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0d1117; color:#e6edf3;
+         font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+         display:flex; justify-content:center; padding:48px 20px; }
+  main { width:100%; max-width:680px; }
+  h1 { font-size:20px; margin:0 0 6px; letter-spacing:-.01em; }
+  .sub { color:#8b949e; margin:0 0 28px; font-size:13px; }
+  button { background:#238636; color:#fff; border:0; border-radius:6px;
+           padding:11px 20px; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover:not(:disabled) { background:#2ea043; }
+  button:disabled { opacity:.5; cursor:default; }
+  .step { border:1px solid #30363d; border-left:3px solid #30363d;
+          border-radius:6px; padding:14px 16px; margin-top:14px; }
+  .step.warn { border-left-color:#d29922; }
+  .step.ok   { border-left-color:#238636; }
+  .step.err  { border-left-color:#f85149; }
+  .label { font-size:11px; text-transform:uppercase; letter-spacing:.09em;
+           color:#8b949e; margin-bottom:8px; }
+  pre { margin:0; white-space:pre-wrap; word-break:break-all; font-size:13px; }
+  a { color:#58a6ff; }
+  .meta { color:#8b949e; font-size:12px; margin-top:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>x402 payment flow</h1>
+  <p class="sub">One HTTP request, paid for mid-flight. Base Sepolia testnet.</p>
+  <button id="go">Request the resource</button>
+  <div id="out"></div>
+</main>
+<script>
+const out = document.getElementById("out");
+const go = document.getElementById("go");
+
+const card = (cls, label, content) =>
+  `<div class="step ${cls}"><div class="label">${label}</div>${content}</div>`;
+
+const findTx = (o) => (JSON.stringify(o ?? {}).match(/0x[0-9a-fA-F]{64}/) || [])[0];
+
+go.onclick = async () => {
+  go.disabled = true;
+  out.innerHTML = card("", "working", "<pre>asking, paying, retrying…</pre>");
+
+  try {
+    const data = await (await fetch("/api/demo")).json();
+    let html = "";
+
+    for (const s of data.steps) {
+      if (s.stage === "challenge") {
+        const a = s.terms?.accepts?.[0] ?? {};
+        html += card("warn", `1 — server replied ${s.status} payment required`,
+          `<pre>amount:  ${a.amount} (atomic units)
+network: ${a.network}
+payTo:   ${a.payTo}
+scheme:  ${a.scheme}</pre>`);
+        html += card("", "2 — client signs authorization",
+          `<pre>payer: ${data.payer}
+no transaction sent yet — just a signature</pre>`);
+      }
+
+      if (s.stage === "settled") {
+        const tx = findTx(s.receipt);
+        html += card(s.paymentStatus === "settled" ? "ok" : "err",
+          `3 — retried with signature → ${s.paymentStatus}`,
+          `<pre>${JSON.stringify(s.body, null, 2)}</pre>` +
+          (tx ? `<div class="meta">tx <a target="_blank"
+                 href="https://sepolia.basescan.org/tx/${tx}">${tx.slice(0,18)}…</a></div>` : ""));
+      }
+    }
+
+    if (!data.ok) html += card("err", "error", `<pre>${data.error}</pre>`);
+    out.innerHTML = html;
+  } catch (e) {
+    out.innerHTML = card("err", "failed", `<pre>${e}</pre>`);
+  }
+  go.disabled = false;
+};
+</script>
+</body>
+</html>

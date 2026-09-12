@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask the Weather</title>
+<style>
+  :root{--ink:#1a1d21;--dim:#5c6672;--line:#dfe3e8;--go:#1a7f4b;}
+  *{box-sizing:border-box}
+  body{margin:0;background:#f4f6f8;color:var(--ink);
+       font:19px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;
+       display:flex;justify-content:center;padding:36px 18px 80px}
+  main{width:100%;max-width:620px}
+  h1{font-size:30px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--dim);margin:0 0 26px;font-size:16px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
+  input{width:100%;font:inherit;padding:15px 16px;border:2px solid var(--line);border-radius:10px}
+  input:focus{outline:none;border-color:var(--go)}
+  button{font:inherit;font-weight:650;border:0;border-radius:10px;padding:14px 22px;cursor:pointer}
+  .primary{background:var(--go);color:#fff;width:100%;margin-top:12px}
+  .primary:disabled{opacity:.45;cursor:default}
+  .ghost{background:#fff;border:2px solid var(--line);color:var(--dim);padding:11px 18px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .price{font-size:34px;font-weight:700;letter-spacing:-.02em}
+  .ask-label{color:var(--dim);font-size:16px;margin-bottom:2px}
+  .answer{font-size:22px;line-height:1.5;margin:0}
+  .bar{height:9px;background:#e8ecf0;border-radius:99px;overflow:hidden;margin:10px 0 6px}
+  .bar > i{display:block;height:100%;background:var(--go);transition:width .4s}
+  .meta{font-size:14px;color:var(--dim)}
+  .rcpt{display:flex;justify-content:space-between;gap:12px;padding:9px 0;
+        border-bottom:1px solid var(--line);font-size:15px}
+  .rcpt:last-child{border-bottom:0}
+  a{color:#1858c4}
+  .tech{background:#0d1117;color:#c9d5e1;border-radius:12px;padding:18px;margin-top:8px;
+        font:14px/1.7 ui-monospace,Menlo,monospace}
+  .tech b{color:#7ee2a8;font-weight:600}
+  .tech .bad{color:#ff9a8c}
+  .toggle{margin-top:26px;text-align:center}
+  .err{color:#b02a1e}
+</style>
+</head>
+<body>
+<main>
+  <h1>Ask the Weather</h1>
+  <p class="sub">Ask a question. We'll buy only the data needed to answer it.</p>
+
+  <div class="card">
+    <div class="ask-label">What would you like to know?</div>
+    <input id="q" value="Should I cover my tomatoes tonight?" autocomplete="off">
+    <button class="primary" id="ask">Ask</button>
+  </div>
+
+  <div id="stage"></div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <b>Spending limit this session</b>
+      <span class="meta" id="left"></span>
+    </div>
+    <div class="bar"><i id="fill" style="width:0%"></i></div>
+    <div id="rcpts" class="meta">No purchases yet.</div>
+    <div class="row" style="margin-top:14px">
+      <button class="ghost" id="reset">Start over</button>
+    </div>
+  </div>
+
+  <div class="toggle"><button class="ghost" id="flip">Show what's happening underneath</button></div>
+  <div id="tech" style="display:none"></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const cents = (n) => (n * 100).toFixed(n * 100 < 1 ? 1 : 2).replace(/\.00$/, "") + "\u00A2";
+let pending = null, last = null, techOpen = false;
+
+const post = (u, b) => fetch(u, {method:"POST",headers:{"Content-Type":"application/json"},
+                              body:JSON.stringify(b||{})}).then(r=>r.json());
+
+function paintBudget(s) {
+  $("left").textContent = cents(s.remaining) + " of " + cents(s.limit) + " left";
+  $("fill").style.width = (100 - (s.spent / s.limit) * 100) + "%";
+  $("rcpts").innerHTML = s.receipts.length
+    ? s.receipts.map(r => '<div class="rcpt"><span>' + r.label + '</span><span>'
+        + cents(r.price) + ' \u00B7 ' + r.at + '</span></div>').join("")
+    : "No purchases yet.";
+}
+
+function paintTech() {
+  if (!techOpen) return;
+  if (!last) { $("tech").innerHTML = '<div class="tech">Make a purchase to see the detail.</div>'; return; }
+  const r = last.receipt, card = 0.30 + r.price * 0.029;
+  $("tech").innerHTML = '<div class="tech">'
+    + 'HTTP 402 \u2192 signed authorization \u2192 settled in <b>' + r.ms + ' ms</b><br>'
+    + 'network eip155:84532 \u00B7 scheme exact \u00B7 asset USDC<br>'
+    + (r.tx ? 'tx <a href="https://sepolia.basescan.org/tx/' + r.tx + '" target="_blank">'
+        + r.tx.slice(0,22) + '\u2026</a><br>' : '')
+    + '<br>this sale &nbsp;&nbsp;&nbsp;&nbsp;<b>' + cents(r.price) + '</b> collected, buyer paid no gas<br>'
+    + 'same on cards <span class="bad">' + cents(card) + '</span> in fees \u2014 a <span class="bad">'
+    + Math.round(card / r.price * 100) + '%</span> loss<br>'
+    + '<br>raw data purchased: ' + JSON.stringify(last.raw)
+    + '</div>';
+}
+
+$("ask").onclick = async () => {
+  const question = $("q").value.trim();
+  if (!question) return;
+  const p = await post("/api/ask", { question });
+  pending = p;
+  $("stage").innerHTML = '<div class="card">'
+    + '<div class="ask-label">To answer that, I need to buy:</div>'
+    + '<div style="font-size:21px;margin:2px 0 14px">' + p.label + '</div>'
+    + '<div class="price">' + cents(p.price) + '</div>'
+    + '<div class="meta">One-time. No account, no card, no subscription.</div>'
+    + '<button class="primary" id="approve">Approve and buy</button></div>';
+  $("approve").onclick = buy;
+};
+
+async function buy() {
+  $("approve").disabled = true;
+  $("approve").textContent = "Paying\u2026";
+  const out = await post("/api/buy", { id: pending.id });
+  if (!out.ok) {
+    $("stage").innerHTML = '<div class="card err">' + out.error + '</div>';
+  } else {
+    last = out;
+    $("stage").innerHTML = '<div class="card"><p class="answer">' + out.answer + '</p>'
+      + '<div class="meta" style="margin-top:14px">Paid ' + cents(out.receipt.price)
+      + ' at ' + out.receipt.at + ' \u00B7 settled in ' + out.receipt.ms + ' ms</div></div>';
+  }
+  paintBudget(out); paintTech();
+}
+
+$("flip").onclick = () => {
+  techOpen = !techOpen;
+  $("tech").style.display = techOpen ? "block" : "none";
+  $("flip").textContent = techOpen ? "Hide the detail" : "Show what's happening underneath";
+  paintTech();
+};
+
+$("reset").onclick = async () => {
+  paintBudget(await post("/api/reset"));
+  $("stage").innerHTML = ""; last = null; paintTech();
+};
+
+fetch("/api/state").then(r => r.json()).then(paintBudget);
+</script>
+</body>
+</html>
