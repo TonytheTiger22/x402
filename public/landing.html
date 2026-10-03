@@ -28,12 +28,24 @@
  @media (max-width:820px){.layout{grid-template-columns:1fr;gap:40px}}
 
  .lede{padding-right:0}
- .lede p{font:400 19px/1.65 var(--serif);margin:0 0 18px;max-width:52ch}
- .lede p.sub{font-size:16px;color:var(--dim)}
- .lede p:first-of-type::first-letter{font:700 56px/.85 var(--serif);float:left;
-   margin:6px 6px 0 0}
- .links-row{display:flex;gap:22px;margin-top:22px;padding-top:18px;border-top:1px solid var(--rule)}
- .links-row a{font:500 14px var(--sans);text-decoration:underline;text-underline-offset:3px}
+ .headline{font:700 40px/1.12 var(--serif);margin:0 0 16px;letter-spacing:-.015em;max-width:13ch}
+ .subhead{font:400 17.5px/1.55 var(--sans);color:var(--dim);margin:0 0 30px;max-width:40ch}
+
+ .stats{display:flex;gap:14px;margin-bottom:30px}
+ .stat{border:1px solid var(--rule);padding:12px 20px;display:flex;flex-direction:column;gap:3px}
+ .stat-num{font:700 28px var(--serif);line-height:1}
+ .stat-label{font:500 12px var(--sans);color:var(--dim)}
+
+ .cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:30px}
+ .btn{display:inline-block;font:600 14.5px var(--sans);padding:14px 24px;text-decoration:none;
+      border-radius:0;border:1px solid var(--ink);transition:background .15s,color .15s}
+ .btn-primary{background:var(--ink);color:var(--paper)}
+ .btn-primary:hover{background:#000}
+ .btn-outline{background:transparent;color:var(--ink)}
+ .btn-outline:hover{background:var(--ink);color:var(--paper)}
+
+ .fine-print{font:italic 400 14px/1.6 var(--serif);color:var(--dim);max-width:44ch;margin:0;
+             padding-top:22px;border-top:1px solid var(--rule)}
 
  /* ---------- the module (form) ---------- */
  .module{border-left:1px solid var(--rule);padding-left:56px}
@@ -108,16 +120,24 @@
 
 <main class="layout">
  <div class="lede">
-  <p>Screen anyone against global sanctions lists, or check whether a crypto
-     wallet address appears on a sanctions list — no account, no contract.
-     Pay per check and get a timestamped record you can hand to an auditor.</p>
-  <p class="sub">Methodology, QA, and every source we check are public. What
-     you do with a result — clear it, escalate it, hold a payment — is
-     entirely your own process.</p>
-  <div class="links-row">
-   <a href="mailto:hello@example.com?subject=Sanctions%20screening%20API">Get API access</a>
-   <a href="/">See the full review workflow</a>
+  <h2 class="headline">Screen anyone against global sanctions lists.</h2>
+  <p class="subhead">Or check whether a crypto wallet address is sanctioned.
+     No account, no contract — pay per check and walk away with a
+     timestamped record you can hand to an auditor.</p>
+
+  <div class="stats">
+   <div class="stat"><span class="stat-num">2&cent;</span><span class="stat-label">per check</span></div>
+   <div class="stat"><span class="stat-num">~2s</span><span class="stat-label">to settle</span></div>
   </div>
+
+  <div class="cta-row">
+   <a class="btn btn-primary" href="mailto:hello@example.com?subject=Sanctions%20screening%20API">Get API access</a>
+   <a class="btn btn-outline" href="/">See the review workflow</a>
+  </div>
+
+  <p class="fine-print">Methodology, QA, and every source we check are
+     public. What you do with a result — clear it, escalate it, hold a
+     payment — is entirely your own process.</p>
  </div>
 
  <div class="module">
