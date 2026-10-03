@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lists we check — PayPerScreen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+ :root{
+   --paper:#fbfaf7; --ink:#1a1a18; --rule:#d9d6cd; --dim:#6b6a63;
+   --ok:#1e5631; --warn:#a6192e; --link:#1f3a5f;
+   --serif:"Source Serif 4",Georgia,serif; --sans:Inter,-apple-system,"Segoe UI",sans-serif;
+ }
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--sans)}
+ a{color:var(--link)}
+
+ .topbar{display:flex;justify-content:space-between;align-items:center;
+         border-bottom:1px solid var(--ink);padding:18px 20px}
+ .topbar a{font:600 15px var(--serif);text-decoration:none;color:var(--ink)}
+ .topbar span{font:500 13px var(--sans);color:var(--dim)}
+
+ .doc{max-width:760px;margin:0 auto;padding:48px 20px 100px}
+ .doc h1{font:700 36px/1.2 var(--serif);margin:0 0 10px;letter-spacing:-.01em}
+ .doc > p:first-of-type{font:400 18px/1.6 var(--serif);color:var(--dim);margin:0 0 36px;
+                         padding-bottom:28px;border-bottom:1px solid var(--rule)}
+ .doc h2{font:700 24px/1.3 var(--serif);margin:44px 0 16px;padding-top:28px;
+         border-top:1px solid var(--rule)}
+ .doc h2:first-of-type{border-top:0;padding-top:0}
+ .doc p{font:400 16px/1.75 var(--serif);margin:0 0 16px;max-width:68ch}
+ .doc a{text-decoration:underline;text-underline-offset:2px}
+ .doc code{font:13px ui-monospace,Menlo,monospace;background:#f1efe9;padding:2px 6px}
+ .doc hr{border:0;border-top:1px solid var(--rule);margin:40px 0}
+ .doc strong{font-weight:700}
+
+ .lists-table{width:100%;border-collapse:collapse;margin:0 0 8px;font:14px var(--sans)}
+ .lists-table th{text-align:left;font:600 12px var(--sans);text-transform:uppercase;
+         letter-spacing:.03em;padding:10px 10px;border-bottom:1px solid var(--ink);color:var(--dim)}
+ .lists-table td{padding:16px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+ .lists-table td.label{font:600 15px var(--serif);color:var(--ink)}
+ .lists-table td.meta{font:13px var(--sans);color:var(--dim)}
+ .lists-table td.num{font:600 16px var(--sans);font-variant-numeric:tabular-nums}
+ .tag{display:inline-block;font:600 11px var(--sans);text-transform:uppercase;
+      letter-spacing:.03em;padding:2px 8px;border:1px solid var(--rule);color:var(--dim)}
+
+ .not-yet{font:italic 15px var(--serif);color:var(--dim);margin:12px 0 0}
+ .not-yet ul{margin:10px 0 0;padding-left:1.2em}
+ .not-yet li{margin-bottom:4px}
+</style></head><body>
+
+<div class="topbar">
+ <a href="/">PayPerScreen</a>
+ <span>Lists we check</span>
+</div>
+
+<main class="doc">
+<h1>Lists we check</h1>
+<p>A plain accounting of what's actually loaded right now — no marketing
+   gloss, just what's in the database this moment. See the
+   <a href="/docs">API docs</a> for how each one is queried.</p>
+
+__LISTS_TABLE__
+
+<h2>Not yet included</h2>
+<p class="not-yet">These are on the roadmap but not loaded today. If you need
+   coverage beyond OFAC, verify against these sources directly for anything
+   high-stakes:</p>
+<ul class="not-yet">
+  <li>UN Security Council Consolidated List</li>
+  <li>EU Consolidated Financial Sanctions List</li>
+  <li>UK OFSI Consolidated List</li>
+</ul>
+
+<h2>Refresh schedule</h2>
+<p>Both lists above are refreshed manually, not on a live schedule. The
+   "Last refreshed" date is when the data currently in the database was
+   pulled — not today's date. Automated refresh is on the roadmap but not
+   built yet.</p>
+</main>
+
+</body></html>

@@ -123,6 +123,40 @@ async function lookupAddress(rawAddress) {
   return rows;
 }
 
+// Free, unauthenticated — just counts and refresh timestamps, nothing
+// that needs paying for. Powers the public "/lists" page on the site.
+app.get("/lists-meta", async (req, res) => {
+  const [{ rows: [nameCount] }, { rows: [addrCount] }, { rows: meta }] = await Promise.all([
+    pool.query("SELECT count(*)::int AS n FROM entities WHERE source = 'OFAC'"),
+    pool.query("SELECT count(*)::int AS n FROM sanctioned_addresses WHERE source = 'OFAC-SDN-CRYPTO'"),
+    pool.query("SELECT source, list_version, refreshed_at FROM list_metadata"),
+  ]);
+  const metaBySource = Object.fromEntries(meta.map((m) => [m.source, m]));
+
+  res.json({
+    lists: [
+      {
+        source: "OFAC",
+        label: "OFAC Specially Designated Nationals (SDN) list",
+        kind: "Names",
+        matchType: "Fuzzy",
+        records: nameCount.n,
+        listVersion: metaBySource.OFAC?.list_version ?? null,
+        refreshedAt: metaBySource.OFAC?.refreshed_at ?? null,
+      },
+      {
+        source: "OFAC-SDN-CRYPTO",
+        label: "OFAC sanctioned digital-currency addresses",
+        kind: "Crypto addresses",
+        matchType: "Exact",
+        records: addrCount.n,
+        listVersion: metaBySource["OFAC-SDN-CRYPTO"]?.list_version ?? null,
+        refreshedAt: metaBySource["OFAC-SDN-CRYPTO"]?.refreshed_at ?? null,
+      },
+    ],
+  });
+});
+
 app.get("/screen-address", async (req, res) => {
   const address = (req.query.address || "").trim();
   if (!address) return res.json({ error: "address is required" });

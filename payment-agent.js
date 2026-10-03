@@ -58,6 +58,41 @@ app.get("/docs", (_, res) => {
   const template = readFileSync(process.cwd() + "/public/docs-template.html", "utf8");
   res.send(template.replace("__CONTENT__", html));
 });
+
+const fmtDate = (iso) => iso
+  ? new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+  : "unknown";
+
+app.get("/lists", async (_, res) => {
+  const template = readFileSync(process.cwd() + "/public/lists-template.html", "utf8");
+  try {
+    const r = await fetch(`${API}/lists-meta`);
+    if (!r.ok) throw new Error(`lists-meta ${r.status}`);
+    const { lists } = await r.json();
+
+    const rows = lists.map((l) => `
+      <tr>
+        <td class="label">${l.label}<br><span class="meta">${l.source}</span></td>
+        <td><span class="tag">${l.kind}</span></td>
+        <td><span class="tag">${l.matchType}</span></td>
+        <td class="num">${l.records.toLocaleString("en-US")}</td>
+        <td class="meta">${fmtDate(l.refreshedAt)}</td>
+      </tr>`).join("");
+
+    const table = `
+      <table class="lists-table">
+        <thead><tr><th>List</th><th>Type</th><th>Match</th><th>Records</th><th>Last refreshed</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    res.send(template.replace("__LISTS_TABLE__", table));
+  } catch (err) {
+    const fallback = `<p><strong>Live list data is temporarily unavailable</strong>
+      (${String(err.message || err)}). Try again shortly, or see
+      <a href="/docs">/docs</a> for what's checked in general.</p>`;
+    res.send(template.replace("__LISTS_TABLE__", fallback));
+  }
+});
 app.get("/api/ledger", (_, res) => res.json(ledger));
 app.get("/api/audit", (_, res) => res.json(audit.list(200)));
 app.get("/api/verify/:ref", (req, res) => res.json(audit.verify(req.params.ref)));
