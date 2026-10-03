@@ -3,6 +3,7 @@
   "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription. Three tiers: raw data (every skill below), do-it-yourself case management (payperscreen.com/login), and an optional AI agent opinion layered on any check.",
   "url": "https://payperscreen.com",
   "documentationUrl": "https://payperscreen.com/docs",
+  "methodologyUrl": "https://payperscreen.com/methodology",
   "version": "1.0.0",
   "apiBaseUrl": "https://keen-solace-production-b976.up.railway.app",
   "apiBaseUrlNote": "Provisional Railway-assigned hostname. All skill paths below are relative to this base, not to payperscreen.com. See documentationUrl for the live source of truth if this changes.",

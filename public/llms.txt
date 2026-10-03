@@ -26,6 +26,10 @@ them.
 
 ## Docs
 
+- [Methodology](https://payperscreen.com/methodology): a complete,
+  signal-by-signal list of what every check actually does, and what it
+  doesn't check yet — read this to judge whether a check is sufficient
+  for your use case.
 - [API reference](https://payperscreen.com/docs): endpoints, pricing, the
   x402 payment handshake, request/response shapes, and honest current
   coverage.

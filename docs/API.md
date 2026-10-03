@@ -6,7 +6,12 @@ request pays for itself in USDC on Base mainnet at the moment it's made.
 
 This document is for anyone integrating programmatically, agent or human.
 If you're a person using the web UI instead, see
-[payperscreen.com](https://payperscreen.com).
+[payperscreen.com](https://payperscreen.com). For a plain-English,
+signal-by-signal breakdown of what each check actually does — including
+what we don't check yet — see
+[payperscreen.com/methodology](https://payperscreen.com/methodology).
+Everything in that page is also reflected in the response shapes
+documented below; neither should ever say more than the other.
 
 ## Who this is for
 

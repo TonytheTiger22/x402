@@ -74,6 +74,7 @@ app.get("/.well-known/agent-card.json", (_, res) =>
 app.get("/", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
 app.get("/audit", (_, res) => res.sendFile(process.cwd() + "/public/audit.html"));
 app.get("/review", (_, res) => res.sendFile(process.cwd() + "/public/compliance.html"));
+app.get("/methodology", (_, res) => res.sendFile(process.cwd() + "/public/methodology.html"));
 // Old path kept working in case anything still links to it.
 app.get("/landing", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
 
