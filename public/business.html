@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sanctions screening for your business — PayPerScreen</title>
+<meta name="description" content="Check a client or counterparty against global sanctions lists in seconds. Top up with a card, then 2¢ a check — no subscription, no software, no crypto wallet.">
+<link rel="canonical" href="https://payperscreen.com/business">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+ :root{
+   --paper:#fbfaf7; --ink:#1a1a18; --rule:#d9d6cd; --dim:#6b6a63;
+   --ok:#1e5631; --warn:#a6192e; --link:#1f3a5f;
+   --serif:"Source Serif 4",Georgia,serif; --sans:Inter,-apple-system,"Segoe UI",sans-serif;
+ }
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--sans)}
+ a{color:var(--link)}
+
+ .preview-banner{background:#1f3a5f;color:#fbfaf7;text-align:center;
+   font:600 13px var(--sans);padding:8px 16px}
+
+ .topbar{display:flex;justify-content:space-between;align-items:center;
+         border-bottom:1px solid var(--ink);padding:18px 20px}
+ .topbar .brand{display:flex;align-items:baseline;gap:8px}
+ .topbar a.home{font:600 15px var(--serif);text-decoration:none;color:var(--ink)}
+ .topbar .tag{font:500 13px var(--sans);color:var(--dim)}
+ .topbar nav a{font:500 13px var(--sans);color:var(--dim);text-decoration:none;margin-left:20px}
+ .topbar nav a:hover{color:var(--ink)}
+
+ main{max-width:600px;margin:0 auto;padding:56px 20px 100px}
+
+ .hero h1{font:700 34px/1.25 var(--serif);margin:0 0 14px;letter-spacing:-.01em;max-width:16ch}
+ .hero p{font:400 17px/1.6 var(--serif);color:var(--dim);margin:0 0 36px;max-width:42ch}
+
+ .steps{list-style:none;margin:0 0 48px;padding:0;
+        border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+ .steps li{display:flex;gap:16px;align-items:flex-start;padding:18px 0}
+ .steps li + li{border-top:1px solid var(--rule)}
+ .steps .n{font:600 13px var(--sans);color:var(--dim);width:18px;flex:none;padding-top:2px}
+ .steps .t{font:600 16px var(--sans);margin:0 0 2px}
+ .steps .d{font:400 14px var(--sans);color:var(--dim)}
+
+ .card{border:1px solid var(--rule);padding:28px;margin:0 0 24px}
+ .card h2{font:700 20px var(--serif);margin:0 0 20px}
+
+ label{display:block;font:600 13px var(--sans);color:var(--dim);margin:0 0 6px}
+ input[type=email],input[type=text],input[type=number]{
+   width:100%;font:16px var(--sans);padding:11px 12px;border:1px solid var(--rule);
+   background:var(--paper);color:var(--ink);margin-bottom:18px
+ }
+ input:focus{outline:2px solid var(--link);outline-offset:1px}
+
+ .amounts{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+ .amount-btn{font:600 14px var(--sans);padding:10px 16px;border:1px solid var(--rule);
+   background:var(--paper);color:var(--ink);cursor:pointer}
+ .amount-btn:hover{border-color:var(--ink)}
+ .amount-btn.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+ .amount-custom{display:flex;align-items:center;gap:6px;border:1px solid var(--rule);padding:0 10px}
+ .amount-custom span{font:600 14px var(--sans);color:var(--dim)}
+ .amount-custom input{border:none;width:70px;padding:10px 4px;margin:0}
+ .amount-custom input:focus{outline:none}
+ .amount-hint{font:13px var(--sans);color:var(--dim);margin:-10px 0 20px}
+
+ button.primary{width:100%;font:600 15px var(--sans);padding:14px 20px;
+   background:var(--ink);color:var(--paper);border:none;cursor:pointer}
+ button.primary:hover{background:#000}
+ button.primary:disabled{background:var(--rule);color:var(--dim);cursor:not-allowed}
+
+ .pay-note{display:flex;align-items:center;gap:8px;justify-content:center;
+   margin-top:14px;font:13px var(--sans);color:var(--dim)}
+
+ .hidden{display:none !important}
+
+ .spinner-row{display:flex;align-items:center;gap:10px;padding:20px 0;
+   font:15px var(--sans);color:var(--dim)}
+ .spinner{width:16px;height:16px;border:2px solid var(--rule);border-top-color:var(--ink);
+   border-radius:50%;animation:spin .7s linear infinite}
+ @keyframes spin{to{transform:rotate(360deg)}}
+
+ .success .bar{height:3px;background:var(--ok);margin-bottom:20px}
+ .balance-row{display:flex;justify-content:space-between;align-items:baseline;
+   border-bottom:1px solid var(--rule);padding-bottom:16px;margin-bottom:16px}
+ .balance-row .label{font:14px var(--sans);color:var(--dim)}
+ .balance-row .amount{font:700 28px var(--sans);font-variant-numeric:tabular-nums}
+
+ .wallet-key{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);
+   padding:12px 14px;margin-bottom:10px}
+ .wallet-key code{font:14px ui-monospace,Menlo,monospace;flex:1}
+ .wallet-key button{font:600 12px var(--sans);padding:6px 12px;border:1px solid var(--ink);
+   background:var(--paper);cursor:pointer}
+ .wallet-key button:hover{background:var(--ink);color:var(--paper)}
+ .key-note{font:13px var(--sans);color:var(--dim);margin:0}
+
+ .screen-balance{font:14px var(--sans);color:var(--dim);margin-top:-6px;margin-bottom:18px}
+
+ .result{border-left:3px solid var(--rule);padding:4px 0 4px 18px;margin-top:4px}
+ .result.clear{border-color:var(--ok)}
+ .result.hit{border-color:var(--warn)}
+ .result h3{font:700 19px var(--serif);margin:0 0 6px}
+ .result p{font:14px var(--sans);color:var(--dim);margin:0}
+
+ footer{border-top:1px solid var(--rule);padding-top:24px;margin-top:8px}
+ footer p{font:italic 14px var(--serif);color:var(--dim);margin:0 0 8px}
+
+ @media (max-width:480px){
+   .hero h1{font-size:28px}
+   .amounts{gap:6px}
+   .amount-btn{padding:9px 12px;font-size:13px}
+ }
+</style></head><body>
+
+<div class="preview-banner">Design preview — top-ups and payments on this page are simulated, nothing is charged</div>
+
+<div class="topbar">
+ <div class="brand">
+   <a class="home" href="/">PayPerScreen</a>
+   <span class="tag">for business</span>
+ </div>
+ <nav><a href="/docs">Built for developers?</a></nav>
+</div>
+
+<main>
+ <div class="hero">
+   <h1>Check a client against sanctions lists in seconds</h1>
+   <p>Top up with a debit or credit card, then pay 2¢ a check. No subscription,
+      no software to install, no crypto wallet.</p>
+ </div>
+
+ <ul class="steps">
+   <li><span class="n">1</span><div><div class="t">Add funds with a card</div>
+     <div class="d">Pay securely through Mollie — Visa, Mastercard, iDEAL, and more.</div></div></li>
+   <li><span class="n">2</span><div><div class="t">Enter a name</div>
+     <div class="d">The person or business you want to check before you work with them.</div></div></li>
+   <li><span class="n">3</span><div><div class="t">Get your result</div>
+     <div class="d">An instant match or clear, checked against OFAC's sanctions list.</div></div></li>
+ </ul>
+
+ <!-- STEP A: top-up form -->
+ <div class="card" id="topup-card">
+   <h2>Add funds</h2>
+   <form id="topup-form">
+     <label for="email">Email</label>
+     <input type="email" id="email" placeholder="you@yourbrokerage.com" required>
+
+     <label>Amount</label>
+     <div class="amounts" id="amount-buttons">
+       <button type="button" class="amount-btn" data-amount="5">$5</button>
+       <button type="button" class="amount-btn active" data-amount="25">$25</button>
+       <button type="button" class="amount-btn" data-amount="100">$100</button>
+       <div class="amount-custom">
+         <span>$</span>
+         <input type="number" id="custom-amount" min="5" step="1" placeholder="Other">
+       </div>
+     </div>
+     <p class="amount-hint">$5 minimum. 1,250 checks for every $25 added.</p>
+
+     <button type="submit" class="primary" id="pay-btn">Continue to payment</button>
+     <div class="pay-note">Payments handled by Mollie. We never see your card details.</div>
+   </form>
+
+   <div class="spinner-row hidden" id="redirecting">
+     <div class="spinner"></div> Redirecting to secure payment…
+   </div>
+ </div>
+
+ <!-- STEP B: funded state -->
+ <div class="card success hidden" id="funded-card">
+   <div class="bar"></div>
+   <h2>Funds added</h2>
+   <div class="balance-row">
+     <span class="label">Balance</span>
+     <span class="amount" id="balance-amount">$25.00</span>
+   </div>
+   <label>Your wallet key — use this to spend your balance</label>
+   <div class="wallet-key">
+     <code id="wallet-key">PPS-7F3K-9QRT-MXB2</code>
+     <button type="button" id="copy-key">Copy</button>
+   </div>
+   <p class="key-note">Keep this safe — it's how you'll check your balance or top up
+      again later. We don't store it anywhere you can recover it from.</p>
+ </div>
+
+ <!-- STEP C: screening -->
+ <div class="card hidden" id="screen-card">
+   <h2>Screen a name</h2>
+   <div class="screen-balance">Balance: <strong id="screen-balance">$25.00</strong> — 2¢ a check</div>
+   <form id="screen-form">
+     <label for="screen-name">Full name</label>
+     <input type="text" id="screen-name" placeholder="e.g. Jane Doe" required>
+     <button type="submit" class="primary" id="screen-btn">Screen this name</button>
+   </form>
+   <div id="screen-result"></div>
+ </div>
+
+ <footer>
+   <p>Checked against OFAC's Specially Designated Nationals list. See exactly
+      what's covered on <a href="/lists">our lists page</a>.</p>
+ </footer>
+</main>
+
+<script>
+// ---- Everything below is a front-end simulation for design review. ----
+// ---- No real payment, no real screening call, no data leaves this page. ----
+
+let balanceCents = 0;
+let chosenAmount = 25;
+
+const amountButtons = document.getElementById('amount-buttons');
+const customAmount = document.getElementById('custom-amount');
+amountButtons.querySelectorAll('.amount-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    amountButtons.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    chosenAmount = Number(btn.dataset.amount);
+    customAmount.value = '';
+  });
+});
+customAmount.addEventListener('input', () => {
+  amountButtons.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
+  chosenAmount = Number(customAmount.value || 0);
+});
+
+document.getElementById('topup-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const amount = customAmount.value ? Number(customAmount.value) : chosenAmount;
+  if (!amount || amount < 5) {
+    customAmount.focus();
+    customAmount.setCustomValidity('Minimum top-up is $5');
+    customAmount.reportValidity();
+    return;
+  }
+  customAmount.setCustomValidity('');
+
+  document.getElementById('pay-btn').disabled = true;
+  document.getElementById('redirecting').classList.remove('hidden');
+
+  // Simulated Mollie round-trip
+  setTimeout(() => {
+    balanceCents = Math.round(amount * 100);
+    document.getElementById('topup-card').classList.add('hidden');
+    document.getElementById('balance-amount').textContent = '$' + (balanceCents / 100).toFixed(2);
+    document.getElementById('funded-card').classList.remove('hidden');
+    document.getElementById('screen-balance').textContent = '$' + (balanceCents / 100).toFixed(2);
+    document.getElementById('screen-card').classList.remove('hidden');
+  }, 1400);
+});
+
+document.getElementById('copy-key').addEventListener('click', () => {
+  navigator.clipboard?.writeText(document.getElementById('wallet-key').textContent);
+  const btn = document.getElementById('copy-key');
+  btn.textContent = 'Copied';
+  setTimeout(() => btn.textContent = 'Copy', 1500);
+});
+
+const SANCTIONED_DEMO_NAMES = ['viktor petrov', 'dmitry firtash'];
+
+document.getElementById('screen-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (balanceCents < 2) {
+    document.getElementById('screen-result').innerHTML =
+      '<div class="result hit"><h3>Balance too low</h3><p>Add more funds to keep screening.</p></div>';
+    return;
+  }
+  const name = document.getElementById('screen-name').value.trim();
+  balanceCents -= 2;
+  document.getElementById('screen-balance').textContent = '$' + (balanceCents / 100).toFixed(2);
+
+  const hit = SANCTIONED_DEMO_NAMES.some(n => name.toLowerCase().includes(n.split(' ')[1]));
+  document.getElementById('screen-result').innerHTML = hit
+    ? `<div class="result hit"><h3>Possible match — review needed</h3><p>"${name}" may match a name on OFAC's sanctions list. Check the details before proceeding.</p></div>`
+    : `<div class="result clear"><h3>Clear — no match found</h3><p>"${name}" does not match any name on the lists checked.</p></div>`;
+});
+</script>
+
+</body></html>
