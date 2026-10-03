@@ -2,11 +2,17 @@ import express from "express";
 import pg from "pg";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { HTTPFacilitatorClient } from "@x402/core/server";
+import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
+
+// Base mainnet (CAIP-2). Was "eip155:84532" (Base Sepolia testnet).
+const NETWORK = "eip155:8453";
 
 const SELLER = process.env.SELLER_ADDRESS;
 const app = express();
-const facilitator = new HTTPFacilitatorClient({ url: "https://x402.org/facilitator" });
+
+// Real CDP facilitator — reads CDP_API_KEY_ID / CDP_API_KEY_SECRET from env.
+// Was the free testnet facilitator at https://x402.org/facilitator.
+const facilitator = createCdpFacilitatorClient();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -14,7 +20,7 @@ const pool = new pg.Pool({
 });
 
 const priced = (price, description) => ({
-  accepts: [{ scheme: "exact", price, network: "eip155:84532", payTo: SELLER }],
+  accepts: [{ scheme: "exact", price, network: NETWORK, payTo: SELLER }],
   description, mimeType: "application/json",
 });
 
@@ -23,7 +29,7 @@ app.use(paymentMiddleware(
     "GET /screen":  priced("$0.02", "Sanctions screening"),
     "GET /context": priced("$0.05", "Field comparison"),
   },
-  new x402ResourceServer(facilitator).register("eip155:84532", new ExactEvmScheme()),
+  new x402ResourceServer(facilitator).register(NETWORK, new ExactEvmScheme()),
 ));
 
 const SUBJECTS = {
