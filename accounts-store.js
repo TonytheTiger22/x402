@@ -11,7 +11,7 @@
 // one small file, no new infrastructure.
 
 import Database from "better-sqlite3";
-import { randomUUID } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 
 const db = new Database("audit.db");
 db.pragma("journal_mode = WAL");
@@ -35,18 +35,25 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token      TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
 `);
 
 const LOGIN_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-function getOrCreateAccount(email) {
+export function getOrCreateAccount(email) {
   const existing = db.prepare("SELECT * FROM accounts WHERE email = ?").get(email);
   if (existing) return existing;
   const row = { id: randomUUID(), email, created_at: new Date().toISOString() };
   db.prepare("INSERT INTO accounts (id, email, created_at) VALUES (@id, @email, @created_at)").run(row);
   return row;
 }
+
+export const listAccounts = () => db.prepare("SELECT * FROM accounts ORDER BY created_at DESC").all();
 
 // Issues a login token for an email address, creating the account on first
 // use. Returns the token and the link to send — today the caller shows
@@ -101,4 +108,41 @@ export function accountForSession(sessionToken) {
 export function destroySession(sessionToken) {
   if (!sessionToken) return;
   db.prepare("DELETE FROM sessions WHERE token = ?").run(sessionToken);
+}
+
+// --- Operator admin access: one shared secret code (ADMIN_CODE env var),
+// not a per-person account. For the site operator, not for customers. ---
+
+const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — shorter than a customer session on purpose
+
+// Constant-time comparison so a wrong guess can't be timed to learn how
+// many leading characters it got right.
+export function checkAdminCode(code) {
+  const expected = process.env.ADMIN_CODE;
+  if (!expected) return false; // no code configured = admin login disabled entirely
+  const a = Buffer.from(String(code || ""));
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+export function createAdminSession() {
+  const token = randomUUID();
+  const now = new Date();
+  const expires = new Date(now.getTime() + ADMIN_SESSION_TTL_MS);
+  db.prepare(`INSERT INTO admin_sessions (token, created_at, expires_at) VALUES (?, ?, ?)`)
+    .run(token, now.toISOString(), expires.toISOString());
+  return { token, expiresAt: expires.toISOString() };
+}
+
+export function isAdminSession(token) {
+  if (!token) return false;
+  const row = db.prepare("SELECT * FROM admin_sessions WHERE token = ?").get(token);
+  if (!row) return false;
+  return new Date(row.expires_at).getTime() >= Date.now();
+}
+
+export function destroyAdminSession(token) {
+  if (!token) return;
+  db.prepare("DELETE FROM admin_sessions WHERE token = ?").run(token);
 }

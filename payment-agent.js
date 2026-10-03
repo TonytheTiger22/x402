@@ -61,6 +61,7 @@ function parseCookies(header) {
 app.use((req, _res, next) => {
   req.cookies = parseCookies(req.headers.cookie);
   req.account = accounts.accountForSession(req.cookies.session);
+  req.isAdmin = accounts.isAdminSession(req.cookies.admin_session);
   next();
 });
 
@@ -166,6 +167,85 @@ app.get("/cases", (req, res) => {
 app.get("/api/cases", (req, res) => {
   if (!req.account) return res.status(401).json({ ok: false, error: "Not signed in" });
   res.json({ ok: true, email: req.account.email, alerts: audit.listOpenAlertsForAccount(req.account.id) });
+});
+
+// --- Operator admin: one shared code (ADMIN_CODE env var), sees every
+// account's open alerts, and can seed test cases without a real payment. ---
+
+app.get("/admin", (_, res) => res.sendFile(process.cwd() + "/public/admin.html"));
+
+app.post("/api/admin/login", (req, res) => {
+  if (!accounts.checkAdminCode(req.body.code)) {
+    return res.json({ ok: false, error: "Incorrect code" });
+  }
+  const { token } = accounts.createAdminSession();
+  res.setHeader("Set-Cookie",
+    `admin_session=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; ` +
+    `SameSite=Lax${req.secure ? "; Secure" : ""}`);
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/logout", (req, res) => {
+  accounts.destroyAdminSession(req.cookies.admin_session);
+  res.setHeader("Set-Cookie", `admin_session=; HttpOnly; Path=/; Max-Age=0${req.secure ? "; Secure" : ""}`);
+  res.json({ ok: true });
+});
+
+app.get("/api/admin/me", (req, res) => res.json({ ok: true, isAdmin: !!req.isAdmin }));
+
+app.get("/api/admin/cases", (req, res) => {
+  if (!req.isAdmin) return res.status(401).json({ ok: false, error: "Admin login required" });
+  const emailById = Object.fromEntries(accounts.listAccounts().map((a) => [a.id, a.email]));
+  const alerts = audit.listAllOpenAlerts().map((r) => ({
+    ...r,
+    account_email: r.account_id ? (emailById[r.account_id] || "(deleted account)") : "(no account — anonymous)",
+  }));
+  res.json({ ok: true, alerts });
+});
+
+const TEST_CASE_TYPES = {
+  name:    { clientRef: "LANDING",         lists: ["OFAC SDN"] },
+  address: { clientRef: "LANDING-ADDRESS", lists: ["OFAC Crypto Addresses"] },
+  website: { clientRef: "LANDING-WEBSITE", lists: ["Website trust signals"] },
+  email:   { clientRef: "LANDING-EMAIL",   lists: ["Email trust signals"] },
+};
+
+// Seeds a fake check straight into an account's queue — no payment, no
+// real screening call. For testing the case-management UI only.
+app.post("/api/admin/test-case", (req, res) => {
+  if (!req.isAdmin) return res.status(401).json({ ok: false, error: "Admin login required" });
+
+  const email = (req.body.email || "").trim().toLowerCase();
+  const type = req.body.type;
+  const subject = (req.body.subject || "").trim();
+  const severity = req.body.severity;
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.json({ ok: false, error: "Enter a valid email for the test account" });
+  if (!subject) return res.json({ ok: false, error: "Enter a subject — a name, address, domain, or email" });
+  if (!TEST_CASE_TYPES[type]) return res.json({ ok: false, error: "Invalid check type" });
+  if (!["low", "medium", "high"].includes(severity)) return res.json({ ok: false, error: "Invalid severity" });
+
+  const account = accounts.getOrCreateAccount(email);
+  const { clientRef, lists } = TEST_CASE_TYPES[type];
+  const hitCount = { low: 0, medium: 1, high: 3 }[severity];
+  const topMatch = type === "name" || type === "address" ? subject : severity;
+
+  const rec = audit.record({
+    subject: { name: subject, dob: null, country: null },
+    listsChecked: lists,
+    listVersion: LIST_VERSION,
+    hitCount,
+    topScore: type === "name" ? { low: null, medium: 70, high: 95 }[severity] : null,
+    topMatch,
+    clientRef,
+    accountId: account.id,
+    pricePaid: 0.02,
+    paymentTx: null,
+  });
+
+  if (hitCount === 0) audit.dispose(rec.reference, "no_match_auto", "system");
+
+  res.json({ ok: true, record: audit.get(rec.reference), account });
 });
 
 app.get("/api/ledger", (_, res) => res.json(ledger));
@@ -362,13 +442,14 @@ app.post("/api/dispose", (req, res) => {
   if (!existing) return res.json({ ok: false, error: "No such check" });
 
   // Checks run from a signed-in account's own queue can only be actioned by
-  // that account. Checks with no owner (the scripted /review demo) keep the
-  // old open behavior so that flow doesn't need a login.
-  if (existing.account_id && (!req.account || req.account.id !== existing.account_id)) {
+  // that account, unless an admin is acting. Checks with no owner (the
+  // scripted /review demo) keep the old open behavior so that flow doesn't
+  // need a login.
+  if (existing.account_id && !req.isAdmin && (!req.account || req.account.id !== existing.account_id)) {
     return res.status(403).json({ ok: false, error: "Not signed in to the account that owns this check" });
   }
 
-  const by = req.account?.email || "reviewer@demo";
+  const by = req.isAdmin ? "admin" : (req.account?.email || "reviewer@demo");
   res.json({ ok: true, record: audit.dispose(reference, disposition, by) });
 });
 

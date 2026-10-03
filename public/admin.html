@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — PayPerScreen</title>
+<style>
+ :root{--ink:#16191d;--dim:#5f6a75;--line:#e0e4e9;--go:#1a7f4b;--stop:#b3261e;--amber:#a4600a}
+ *{box-sizing:border-box}
+ body{margin:0;background:#f5f7f9;color:var(--ink);
+      font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;
+      display:flex;justify-content:center;padding:32px 18px 90px}
+ main{width:100%;max-width:1000px}
+ .topbar{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:4px}
+ h1{font-size:25px;margin:0;letter-spacing:-.02em}
+ .who{font-size:14px;color:var(--dim)}
+ .who button{font:inherit;background:none;border:0;color:#1858c4;cursor:pointer;padding:0;margin-left:10px}
+ .sub{color:var(--dim);margin:6px 0 22px;font-size:15px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:20px;margin-bottom:14px;max-width:440px}
+ .card.wide{max-width:none}
+ .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin-bottom:10px}
+ label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.09em;
+       color:var(--dim);margin:12px 0 6px}
+ label:first-of-type{margin-top:0}
+ input,select{font:inherit;padding:10px 12px;border:2px solid var(--line);border-radius:9px;width:100%}
+ button{font:inherit;font-weight:640;border:0;border-radius:9px;padding:10px 16px;cursor:pointer}
+ .p{background:#1a2634;color:#fff;margin-top:14px;width:100%}
+ .p:disabled{opacity:.5;cursor:default}
+ .clear{background:var(--go);color:#fff}
+ .esc{background:var(--stop);color:#fff}
+ .g{background:#fff;border:2px solid var(--line);color:var(--dim)}
+ .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+ .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+ table{width:100%;border-collapse:collapse;font-size:13.5px}
+ th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--dim);font-weight:600;padding:8px 7px;border-bottom:1px solid var(--line)}
+ td{padding:10px 7px;border-bottom:1px solid #eef1f4;vertical-align:top}
+ tr:hover td{background:#fafbfc}
+ code{font:12.5px ui-monospace,Menlo,monospace}
+ .pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+ .ok{background:#e6f4ec;color:var(--go)}
+ .warn{background:#fdf3e3;color:var(--amber)}
+ .bad{background:#fdeceb;color:var(--stop)}
+ .empty{padding:30px 10px;text-align:center;color:var(--dim)}
+ .note{font-size:13px;color:var(--dim);margin-top:10px}
+ .err{color:var(--stop);font-size:14px;margin-top:8px}
+</style></head><body><main>
+
+<div id="gate">
+ <h1>Admin</h1>
+ <p class="sub">Operator access — one shared code, set as the ADMIN_CODE environment variable.</p>
+ <div class="card">
+  <label>Admin code</label>
+  <input id="code" type="password" placeholder="Enter the admin code">
+  <button class="p" id="go">Sign in</button>
+  <div id="err" class="err"></div>
+ </div>
+</div>
+
+<div id="dash" style="display:none">
+ <div class="topbar">
+  <h1>Admin</h1>
+  <div class="who">admin<button id="signout">Sign out</button></div>
+ </div>
+ <p class="sub">Every account's open alerts, plus a way to seed test cases without a real payment.</p>
+
+ <div class="card">
+  <div class="lbl">Create a test case</div>
+  <label>Test account email</label>
+  <input id="t-email" placeholder="test@example.com">
+  <div class="grid2">
+   <div>
+    <label>Check type</label>
+    <select id="t-type">
+     <option value="name">Name</option>
+     <option value="address">Wallet address</option>
+     <option value="website">Website</option>
+     <option value="email">Email</option>
+    </select>
+   </div>
+   <div>
+    <label>Severity</label>
+    <select id="t-severity">
+     <option value="high">High / red flag</option>
+     <option value="medium">Medium</option>
+     <option value="low">Low (auto-clears, won't queue)</option>
+    </select>
+   </div>
+  </div>
+  <label>Subject</label>
+  <input id="t-subject" placeholder="e.g. Viktor Petrov, or suspicious-site.example">
+  <button class="p" id="t-go">Add test case</button>
+  <div id="t-err" class="err"></div>
+  <div id="t-out" class="note"></div>
+ </div>
+
+ <div class="card wide">
+  <div class="lbl">Open alerts — all accounts</div>
+  <div id="tbl">Loading&hellip;</div>
+ </div>
+</div>
+
+<script>
+const $=(i)=>document.getElementById(i);
+const when=(s)=>new Date(s).toLocaleString("en-GB",{day:"2-digit",month:"short",
+                 hour:"2-digit",minute:"2-digit"});
+
+$("go").onclick=async()=>{
+ $("err").textContent="";
+ const code=$("code").value;
+ if(!code){$("err").textContent="Enter the admin code.";return;}
+ $("go").disabled=true;
+ try{
+  const res=await fetch("/api/admin/login",{method:"POST",
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify({code})});
+  const r=await res.json();
+  if(!r.ok){$("err").textContent=r.error||"Something went wrong.";return;}
+  showDash();
+ } finally { $("go").disabled=false; }
+};
+
+$("signout").onclick=async()=>{
+ await fetch("/api/admin/logout",{method:"POST"});
+ location.reload();
+};
+
+const TYPE_LABEL={"LANDING":"Name","LANDING-ADDRESS":"Wallet address",
+ "LANDING-WEBSITE":"Website","LANDING-EMAIL":"Email"};
+function riskPill(r){
+ const t=r.top_match;
+ if(t==="high") return '<span class="pill bad">high risk</span>';
+ if(t==="medium") return '<span class="pill warn">medium risk</span>';
+ if(t==="low") return '<span class="pill ok">low risk</span>';
+ return '<span class="pill warn">'+r.hit_count+' hit(s)</span>';
+}
+
+let rows=[];
+function draw(){
+ if(!rows.length){ $("tbl").innerHTML='<div class="empty">No open alerts anywhere right now.</div>'; return; }
+ $("tbl").innerHTML='<table><tr><th>Account</th><th>Type</th><th>Subject</th><th>Checked</th>'
+ +'<th>Result</th><th>Reference</th><th></th></tr>'
+ +rows.map((r,i)=>'<tr><td>'+r.account_email+'</td><td>'+(TYPE_LABEL[r.client_ref]||r.client_ref||"—")
+  +'</td><td>'+r.subject_name+'</td><td>'+when(r.performed_at)+'</td><td>'+riskPill(r)
+  +'</td><td><code>'+r.reference+'</code></td>'
+  +'<td><div class="row">'
+  +'<button class="clear" onclick="decide('+i+',\'cleared\')">Clear</button>'
+  +'<button class="esc" onclick="decide('+i+',\'escalated\')">Escalate</button>'
+  +'</div></td></tr>').join('')
+ +'</table>';
+}
+
+window.decide=async(i,disposition)=>{
+ const r=rows[i];
+ const res=await fetch("/api/dispose",{method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({reference:r.reference, disposition})});
+ const d=await res.json();
+ if(!d.ok){alert(d.error||"Couldn't record that decision.");return;}
+ loadCases();
+};
+
+$("t-go").onclick=async()=>{
+ $("t-err").textContent=""; $("t-out").textContent="";
+ const body={
+  email:$("t-email").value.trim(), type:$("t-type").value,
+  severity:$("t-severity").value, subject:$("t-subject").value.trim(),
+ };
+ if(!body.email||!body.subject){$("t-err").textContent="Fill in an email and a subject.";return;}
+ $("t-go").disabled=true;
+ try{
+  const res=await fetch("/api/admin/test-case",{method:"POST",
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const r=await res.json();
+  if(!r.ok){$("t-err").textContent=r.error||"Something went wrong.";return;}
+  $("t-out").textContent="Added "+r.record.reference+" to "+r.account.email+"'s queue.";
+  $("t-subject").value="";
+  loadCases();
+ } finally { $("t-go").disabled=false; }
+};
+
+async function loadCases(){
+ const r=await(await fetch("/api/admin/cases")).json();
+ if(!r.ok){ showGate(); return; }
+ rows=r.alerts; draw();
+}
+
+function showDash(){ $("gate").style.display="none"; $("dash").style.display=""; loadCases(); }
+function showGate(){ $("gate").style.display=""; $("dash").style.display="none"; }
+
+fetch("/api/admin/me").then(r=>r.json()).then(r=>{ if(r.isAdmin) showDash(); });
+</script>
+</main></body></html>

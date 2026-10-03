@@ -105,6 +105,12 @@ export const listOpenAlertsForAccount = (accountId) =>
   db.prepare(`SELECT * FROM checks WHERE account_id = ? AND hit_count > 0
               AND disposition IS NULL ORDER BY performed_at DESC`).all(accountId);
 
+// Admin view: every open alert across every account (including ones with
+// no account at all, e.g. the scripted /review demo), newest first.
+export const listAllOpenAlerts = () =>
+  db.prepare(`SELECT * FROM checks WHERE hit_count > 0 AND disposition IS NULL
+              ORDER BY performed_at DESC`).all();
+
 export function verify(reference) {
   const r = get(reference);
   if (!r) return { found: false };
