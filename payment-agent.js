@@ -6,6 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import * as audit from "./audit-store.js";
 
 const signer = privateKeyToAccount(process.env.BUYER_KEY);
+console.log("Buyer wallet address:", signer.address);
 const client = new x402Client();
 client.register("eip155:*", new ExactEvmScheme(signer));
 const fetchWithPayment = wrapFetchWithPayment(fetch, client);
