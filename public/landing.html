@@ -204,6 +204,8 @@
   <div class="modes">
    <button class="mode active" id="tab-name">Name</button>
    <button class="mode" id="tab-address">Wallet address</button>
+   <button class="mode" id="tab-website">Website</button>
+   <button class="mode" id="tab-email">Email</button>
   </div>
 
   <div id="card-name">
@@ -252,6 +254,37 @@
    <div id="err-address" class="err"></div>
   </div>
 
+  <div id="card-website" style="display:none">
+   <label>Website address <span class="req">(required)</span></label>
+   <input id="website" placeholder="e.g. example.com">
+
+   <div class="examples">
+    <span class="ex" id="ex-website">Try an example site</span>
+   </div>
+
+   <button class="go" id="go-website">Check this website</button>
+   <div class="price">Costs 2¢. Seven free, zero-key signals &mdash;
+    domain age, SSL certificate, certificate history, email
+    authentication, redirects, security headers, and web-archive
+    history.</div>
+   <div id="err-website" class="err"></div>
+  </div>
+
+  <div id="card-email" style="display:none">
+   <label>Email address <span class="req">(required)</span></label>
+   <input id="email" placeholder="e.g. someone@example.com">
+
+   <div class="examples">
+    <span class="ex" id="ex-email">Try an example address</span>
+   </div>
+
+   <button class="go" id="go-email">Check this email</button>
+   <div class="price">Costs 2¢. Ten signals &mdash; mail server
+    validity, disposable-domain check, domain age, mailbox
+    verification, blocklist status, and more.</div>
+   <div id="err-email" class="err"></div>
+  </div>
+
   <div id="result" class="result"></div>
  </div>
 </main>
@@ -276,18 +309,24 @@ $("ex-hit").onclick=()=>{
  $("dob").value="1978-09-03"; $("type").value="Individual";
 };
 
-$("tab-name").onclick=()=>{
- $("tab-name").classList.add("active"); $("tab-address").classList.remove("active");
- $("card-name").style.display=""; $("card-address").style.display="none";
- $("result").innerHTML=""; $("err").textContent=""; $("err-address").textContent="";
-};
-$("tab-address").onclick=()=>{
- $("tab-address").classList.add("active"); $("tab-name").classList.remove("active");
- $("card-address").style.display=""; $("card-name").style.display="none";
- $("result").innerHTML=""; $("err").textContent=""; $("err-address").textContent="";
-};
+const TABS=["name","address","website","email"];
+function showTab(active){
+ TABS.forEach(t=>{
+  $("tab-"+t).classList.toggle("active", t===active);
+  $("card-"+t).style.display = t===active ? "" : "none";
+ });
+ $("result").innerHTML="";
+ ["err","err-address","err-website","err-email"].forEach(id=>{ if($(id)) $(id).textContent=""; });
+}
+$("tab-name").onclick=()=>showTab("name");
+$("tab-address").onclick=()=>showTab("address");
+$("tab-website").onclick=()=>showTab("website");
+$("tab-email").onclick=()=>showTab("email");
+
 $("ex-addr-clean").onclick=()=>{ $("address").value="1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"; };
 $("ex-addr-hit").onclick=()=>{ $("address").value="123WBUDmSJv4GctdVEz6Qq6z8nXSKrJ4KX"; };
+$("ex-website").onclick=()=>{ $("website").value="google.com"; };
+$("ex-email").onclick=()=>{ $("email").value="info@google.com"; };
 
 const STATUS_TAG={match:['y','agrees'],partial:['p','partial'],differs:['n','differs'],unknown:['u','no data']};
 function comparisonTable(fields){
@@ -390,6 +429,88 @@ $("go-address").onclick=async()=>{
   $("err-address").textContent=String(e);
  } finally {
   $("go-address").disabled=false; $("go-address").textContent="Screen this address";
+ }
+};
+
+const VERDICT_BANNER={clear:"ok", some_concerns:"warn", high_risk:"warn"};
+const VERDICT_LABEL={clear:"Clear", some_concerns:"Some concerns", high_risk:"High risk"};
+function signalsTable(signals){
+ const rows=signals.map(s=>{
+  const tag = s.status==="pass" ? "y" : s.status==="flag" ? "n" : "u";
+  const label = s.status==="pass" ? "ok" : s.status==="flag" ? "flag" : "unknown";
+  return '<tr class="'+(s.status==="flag"?"no":"")+'"><td>'+s.label+'</td><td><span class="tag '
+   +tag+'">'+label+'</span></td><td>'+s.detail+'</td></tr>';
+ }).join('');
+ return '<table><tr><th>Signal</th><th></th><th>Detail</th></tr>'+rows+'</table>';
+}
+
+$("go-website").onclick=async()=>{
+ const url=$("website").value.trim();
+ $("err-website").textContent="";
+ if(!url){$("err-website").textContent="Enter a website to check.";return;}
+
+ $("go-website").disabled=true; $("go-website").textContent="Checking… paying as it goes.";
+ $("result").innerHTML="";
+
+ try{
+  const res=await fetch("/api/check-website",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({url})});
+  const r=await res.json();
+
+  if(!r.ok){$("err-website").textContent=r.error||"Something went wrong.";return;}
+
+  const b=r.check;
+  const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
+  const banner=VERDICT_BANNER[b.verdict]||"warn";
+  const label=VERDICT_LABEL[b.verdict]||b.verdict;
+
+  $("result").innerHTML='<div class="banner '+banner+'">'+label+' &mdash; '+b.domain
+    +' ('+b.flagCount+' flag(s), '+b.unknownCount+' unknown)</div>'
+   +'<div class="card">'+signalsTable(b.signals)
+   +'<div class="meta">'+b.note+'</div></div>'
+   +'<div class="card">'
+   +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+   +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
+ } catch(e){
+  $("err-website").textContent=String(e);
+ } finally {
+  $("go-website").disabled=false; $("go-website").textContent="Check this website";
+ }
+};
+
+$("go-email").onclick=async()=>{
+ const email=$("email").value.trim();
+ $("err-email").textContent="";
+ if(!email){$("err-email").textContent="Enter an email address to check.";return;}
+
+ $("go-email").disabled=true; $("go-email").textContent="Checking… paying as it goes.";
+ $("result").innerHTML="";
+
+ try{
+  const res=await fetch("/api/check-email",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({email})});
+  const r=await res.json();
+
+  if(!r.ok){$("err-email").textContent=r.error||"Something went wrong.";return;}
+
+  const b=r.check;
+  const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
+  const banner=VERDICT_BANNER[b.verdict]||"warn";
+  const label=VERDICT_LABEL[b.verdict]||b.verdict;
+
+  $("result").innerHTML='<div class="banner '+banner+'">'+label+' &mdash; '+b.email
+    +' ('+b.flagCount+' flag(s), '+b.unknownCount+' unknown)</div>'
+   +'<div class="card">'+signalsTable(b.signals)
+   +'<div class="meta">'+b.note+'</div></div>'
+   +'<div class="card">'
+   +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+   +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
+ } catch(e){
+  $("err-email").textContent=String(e);
+ } finally {
+  $("go-email").disabled=false; $("go-email").textContent="Check this email";
  }
 };
 </script>

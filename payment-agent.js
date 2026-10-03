@@ -218,6 +218,66 @@ app.post("/api/screen-address", async (req, res) => {
   }
 });
 
+app.post("/api/check-website", async (req, res) => {
+  const url = (req.body.url || "").trim();
+  if (!url) return res.json({ ok: false, error: "A website address is required" });
+
+  try {
+    const check = await buyQuery("/screen-website", { url },
+                                  "Website trust check", 0.02);
+    const b = check.body;
+    if (b.ok === false) return res.json({ ok: false, error: b.error || "Could not check that site" });
+
+    const rec = audit.record({
+      subject: { name: b.domain, dob: null, country: null },
+      listsChecked: ["Website trust signals"],
+      listVersion: LIST_VERSION,
+      hitCount: b.flagCount,
+      topScore: null,
+      topMatch: b.verdict,
+      clientRef: "LANDING-WEBSITE",
+      pricePaid: 0.02,
+      paymentTx: check.line.tx,
+    });
+
+    if (b.verdict === "clear") audit.dispose(rec.reference, "no_match_auto", "system");
+
+    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
+  } catch (err) {
+    res.json({ ok: false, error: String(err), ledger });
+  }
+});
+
+app.post("/api/check-email", async (req, res) => {
+  const email = (req.body.email || "").trim();
+  if (!email) return res.json({ ok: false, error: "An email address is required" });
+
+  try {
+    const check = await buyQuery("/screen-email", { email },
+                                  "Email trust check", 0.02);
+    const b = check.body;
+    if (b.ok === false) return res.json({ ok: false, error: b.error || "Could not check that address" });
+
+    const rec = audit.record({
+      subject: { name: b.email, dob: null, country: null },
+      listsChecked: ["Email trust signals"],
+      listVersion: LIST_VERSION,
+      hitCount: b.flagCount,
+      topScore: null,
+      topMatch: b.verdict,
+      clientRef: "LANDING-EMAIL",
+      pricePaid: 0.02,
+      paymentTx: check.line.tx,
+    });
+
+    if (b.verdict === "clear") audit.dispose(rec.reference, "no_match_auto", "system");
+
+    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
+  } catch (err) {
+    res.json({ ok: false, error: String(err), ledger });
+  }
+});
+
 app.post("/api/dispose", (req, res) => {
   const { reference, disposition } = req.body;
   if (!["cleared","escalated"].includes(disposition))
