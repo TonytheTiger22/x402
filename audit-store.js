@@ -27,6 +27,13 @@ CREATE TABLE IF NOT EXISTS checks (
 CREATE INDEX IF NOT EXISTS idx_perf ON checks(performed_at);
 `);
 
+// account_id ties a check to a case-management portal account. Added after
+// the table already existed in production, so it's a migration, not part
+// of the CREATE above — wrapped because ALTER TABLE ADD COLUMN errors if
+// the column is already there.
+try { db.exec("ALTER TABLE checks ADD COLUMN account_id TEXT"); } catch {}
+db.exec("CREATE INDEX IF NOT EXISTS idx_account_open ON checks(account_id, disposition)");
+
 // Canonical serialisation: stable key order, no floats left to chance.
 // Same shape a future on-chain commitment would hash.
 export function canonical(o) {
@@ -62,6 +69,7 @@ export function record(input) {
   const row = {
     ...core,
     client_ref: input.clientRef ?? null,
+    account_id: input.accountId ?? null,
     disposition: null, disposed_at: null, disposed_by: null,
     price_paid: input.pricePaid ?? null,
     payment_tx: input.paymentTx ?? null,
@@ -69,11 +77,11 @@ export function record(input) {
   };
 
   db.prepare(`INSERT INTO checks
-    (reference, client_ref, performed_at, subject_name, subject_dob, subject_country,
+    (reference, client_ref, account_id, performed_at, subject_name, subject_dob, subject_country,
      lists_checked, list_version, hit_count, top_score, top_match,
      disposition, disposed_at, disposed_by, price_paid, payment_tx, record_hash)
     VALUES
-    (@reference, @client_ref, @performed_at, @subject_name, @subject_dob, @subject_country,
+    (@reference, @client_ref, @account_id, @performed_at, @subject_name, @subject_dob, @subject_country,
      @lists_checked, @list_version, @hit_count, @top_score, @top_match,
      @disposition, @disposed_at, @disposed_by, @price_paid, @payment_tx, @record_hash)`).run(row);
 
@@ -90,6 +98,12 @@ export function dispose(reference, disposition, by) {
 export const get  = (r) => db.prepare("SELECT * FROM checks WHERE reference=?").get(r);
 export const list = (n = 100) =>
   db.prepare("SELECT * FROM checks ORDER BY performed_at DESC LIMIT ?").all(n);
+
+// The case-management queue: this account's checks that came back with at
+// least one hit/flag and have not yet been cleared or escalated.
+export const listOpenAlertsForAccount = (accountId) =>
+  db.prepare(`SELECT * FROM checks WHERE account_id = ? AND hit_count > 0
+              AND disposition IS NULL ORDER BY performed_at DESC`).all(accountId);
 
 export function verify(reference) {
   const r = get(reference);

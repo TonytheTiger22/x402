@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Case queue — PayPerScreen</title>
+<style>
+ :root{--ink:#16191d;--dim:#5f6a75;--line:#e0e4e9;--go:#1a7f4b;--stop:#b3261e;--amber:#a4600a}
+ *{box-sizing:border-box}
+ body{margin:0;background:#f5f7f9;color:var(--ink);
+      font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;
+      display:flex;justify-content:center;padding:32px 18px 90px}
+ main{width:100%;max-width:1000px}
+ .topbar{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:4px}
+ h1{font-size:25px;margin:0;letter-spacing:-.02em}
+ .who{font-size:14px;color:var(--dim)}
+ .who button{font:inherit;background:none;border:0;color:#1858c4;cursor:pointer;padding:0;margin-left:10px}
+ .sub{color:var(--dim);margin:6px 0 22px;font-size:15px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:20px;margin-bottom:14px}
+ .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin-bottom:10px}
+ button{font:inherit;font-weight:640;border:0;border-radius:9px;padding:9px 15px;cursor:pointer}
+ .clear{background:var(--go);color:#fff}
+ .esc{background:var(--stop);color:#fff}
+ .g{background:#fff;border:2px solid var(--line);color:var(--dim)}
+ .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+ table{width:100%;border-collapse:collapse;font-size:13.5px}
+ th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--dim);font-weight:600;padding:8px 7px;border-bottom:1px solid var(--line)}
+ td{padding:10px 7px;border-bottom:1px solid #eef1f4;vertical-align:top}
+ tr:hover td{background:#fafbfc}
+ code{font:12.5px ui-monospace,Menlo,monospace}
+ .pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+ .ok{background:#e6f4ec;color:var(--go)}
+ .warn{background:#fdf3e3;color:var(--amber)}
+ .bad{background:#fdeceb;color:var(--stop)}
+ .grey{background:#eef1f4;color:var(--dim)}
+ .note{font-size:13px;color:var(--dim);margin-top:10px}
+ .empty{padding:30px 10px;text-align:center;color:var(--dim)}
+ .kv{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;gap:16px}
+ .kv span:first-child{color:var(--dim)}
+ .kv b{text-align:right;word-break:break-word}
+ a{color:#1858c4}
+</style></head><body><main>
+
+<div class="topbar">
+ <h1>Case queue</h1>
+ <div class="who" id="who"></div>
+</div>
+<p class="sub">Checks that came back with a hit or a flag and haven't been cleared or
+   escalated yet. Only checks run while signed in to this account show up here.</p>
+
+<div class="card">
+ <div class="lbl">Open alerts</div>
+ <div id="tbl">Loading&hellip;</div>
+</div>
+
+<div id="detail"></div>
+</main>
+<script>
+const $=(i)=>document.getElementById(i);
+const when=(s)=>new Date(s).toLocaleString("en-GB",{day:"2-digit",month:"short",
+                 hour:"2-digit",minute:"2-digit"});
+let rows=[];
+
+const TYPE_LABEL={
+ "LANDING":"Name", "LANDING-ADDRESS":"Wallet address",
+ "LANDING-WEBSITE":"Website", "LANDING-EMAIL":"Email",
+};
+function typeOf(r){ return TYPE_LABEL[r.client_ref] || r.client_ref || "Check"; }
+
+function riskPill(r){
+ const t=r.top_match;
+ if(t==="high") return '<span class="pill bad">high risk</span>';
+ if(t==="medium") return '<span class="pill warn">medium risk</span>';
+ if(t==="low") return '<span class="pill ok">low risk</span>';
+ return '<span class="pill warn">'+r.hit_count+' hit(s)</span>';
+}
+
+function draw(){
+ if(!rows.length){
+  $("tbl").innerHTML='<div class="empty">No open alerts. Checks you run while signed in '
+   +'that come back clean are closed automatically — only ones that need a decision '
+   +'land here.</div>';
+  return;
+ }
+ $("tbl").innerHTML='<table><tr><th>Type</th><th>Subject</th><th>Checked</th>'
+ +'<th>Result</th><th>Reference</th><th></th></tr>'
+ +rows.map((r,i)=>'<tr><td>'+typeOf(r)+'</td><td>'+r.subject_name+'</td><td>'+when(r.performed_at)
+  +'</td><td>'+riskPill(r)+'</td><td><code>'+r.reference+'</code></td>'
+  +'<td><div class="row">'
+  +'<button class="clear" onclick="decide('+i+',\'cleared\')">Clear</button>'
+  +'<button class="esc" onclick="decide('+i+',\'escalated\')">Escalate</button>'
+  +'</div></td></tr>').join('')
+ +'</table>';
+}
+
+window.decide=async(i,disposition)=>{
+ const r=rows[i];
+ const res=await fetch("/api/dispose",{method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({reference:r.reference, disposition})});
+ const d=await res.json();
+ if(!d.ok){alert(d.error||"Couldn't record that decision.");return;}
+ $("detail").innerHTML='<div class="card"><div class="lbl">Decision recorded</div>'
+  +'<div class="kv"><span>Check</span><b><code>'+r.reference+'</code></b></div>'
+  +'<div class="kv"><span>Outcome</span><b>'+disposition+'</b></div>'
+  +'<div class="kv"><span>By</span><b>'+(d.record.disposed_by||"")+'</b></div>'
+  +'<div class="note">Recorded in the audit trail. This alert is now off the open queue.</div></div>';
+ load();
+};
+
+async function load(){
+ const r=await(await fetch("/api/cases")).json();
+ if(!r.ok){ location.href="/login"; return; }
+ $("who").innerHTML=r.email+'<button id="signout">Sign out</button>';
+ $("signout").onclick=async()=>{ await fetch("/api/auth/logout",{method:"POST"}); location.href="/login"; };
+ rows=r.alerts; draw();
+}
+load();
+</script></body></html>

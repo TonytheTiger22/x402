@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in — PayPerScreen</title>
+<style>
+ :root{--ink:#16191d;--dim:#5f6a75;--line:#e0e4e9;--go:#1a7f4b;--stop:#b3261e}
+ *{box-sizing:border-box}
+ body{margin:0;background:#f5f7f9;color:var(--ink);
+      font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;
+      display:flex;justify-content:center;padding:48px 18px 90px}
+ main{width:100%;max-width:440px}
+ h1{font-size:25px;margin:0 0 4px;letter-spacing:-.02em}
+ .sub{color:var(--dim);margin:0 0 22px;font-size:15px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:22px;margin-bottom:14px}
+ label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.09em;
+       color:var(--dim);margin-bottom:8px}
+ input{font:inherit;padding:12px 14px;border:2px solid var(--line);border-radius:9px;
+       width:100%;margin-bottom:14px}
+ button{font:inherit;font-weight:640;border:0;border-radius:9px;padding:12px 20px;
+        cursor:pointer;width:100%}
+ .p{background:#1a2634;color:#fff}
+ .p:disabled{opacity:.5;cursor:default}
+ .note{font-size:13px;color:var(--dim);margin-top:4px;line-height:1.5}
+ .err{color:var(--stop);font-size:14px;margin-top:8px}
+ .linkbox{background:#fdf3e3;border:1px solid #f0dcad;border-radius:9px;padding:14px;
+          margin-top:14px;font-size:14px;word-break:break-all}
+ .linkbox a{color:#1858c4;font-weight:600}
+ a.back{color:var(--dim);font-size:14px;text-decoration:none}
+</style></head><body><main>
+<h1>Sign in to your case queue</h1>
+<p class="sub">No password — enter your email and we'll give you a one-time
+   sign-in link. Each link works once and expires after 15 minutes.</p>
+
+<div class="card">
+ <label>Email address</label>
+ <input id="email" type="email" placeholder="you@yourbusiness.com">
+ <button class="p" id="go">Send me a sign-in link</button>
+ <div id="err" class="err"></div>
+ <div id="out"></div>
+</div>
+
+<a class="back" href="/">&larr; Back to the screening tool</a>
+
+<script>
+const $=(i)=>document.getElementById(i);
+$("go").onclick=async()=>{
+ const email=$("email").value.trim();
+ $("err").textContent=""; $("out").innerHTML="";
+ if(!email){$("err").textContent="Enter an email address.";return;}
+ $("go").disabled=true; $("go").textContent="Sending…";
+ try{
+  const res=await fetch("/api/auth/request-link",{method:"POST",
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify({email})});
+  const r=await res.json();
+  if(!r.ok){$("err").textContent=r.error||"Something went wrong.";return;}
+  $("out").innerHTML='<div class="linkbox"><b>Email delivery isn’t wired up yet</b> — '
+   +'here’s your link directly: <a href="'+r.link+'">'+r.link+'</a>'
+   +'<div class="note" style="margin-top:8px">In production this would land in your inbox instead '
+   +'of being shown on screen. The link expires in 15 minutes and works once.</div></div>';
+ } catch(e){
+  $("err").textContent=String(e);
+ } finally {
+  $("go").disabled=false; $("go").textContent="Send me a sign-in link";
+ }
+};
+</script>
+</main></body></html>

@@ -6,6 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { marked } from "marked";
 import { readFileSync } from "fs";
 import * as audit from "./audit-store.js";
+import * as accounts from "./accounts-store.js";
 
 const signer = privateKeyToAccount(process.env.BUYER_KEY);
 console.log("Buyer wallet address:", signer.address);
@@ -43,7 +44,26 @@ async function buyQuery(path, params, label, price) {
 const buy = (path, id, label, price) => buyQuery(path, { id }, label, price);
 
 const app = express();
+app.set("trust proxy", 1); // Railway terminates TLS in front of us; needed so req.secure is right
 app.use(express.json());
+
+// Minimal hand-rolled cookie parsing — one cookie, not worth a dependency.
+function parseCookies(header) {
+  const out = {};
+  (header || "").split(";").forEach((pair) => {
+    const idx = pair.indexOf("=");
+    if (idx === -1) return;
+    const k = pair.slice(0, idx).trim();
+    if (k) out[k] = decodeURIComponent(pair.slice(idx + 1).trim());
+  });
+  return out;
+}
+app.use((req, _res, next) => {
+  req.cookies = parseCookies(req.headers.cookie);
+  req.account = accounts.accountForSession(req.cookies.session);
+  next();
+});
+
 app.use(express.static("public"));
 app.use("/examples", express.static("examples"));
 // express.static ignores dotfiles/dot-directories by default, so
@@ -97,6 +117,57 @@ app.get("/lists", async (_, res) => {
     res.send(template.replace("__LISTS_TABLE__", fallback));
   }
 });
+// --- Case management portal: magic-link auth + each account's open queue ---
+
+app.get("/login", (_, res) => res.sendFile(process.cwd() + "/public/login.html"));
+
+app.post("/api/auth/request-link", (req, res) => {
+  const email = (req.body.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.json({ ok: false, error: "Enter a valid email address" });
+  }
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const { link, expiresAt } = accounts.requestLink(email, baseUrl);
+  console.log(`Magic link for ${email}: ${link}`); // stand-in until real email delivery is wired up
+  res.json({
+    ok: true, link, expiresAt,
+    note: "Email delivery isn't wired up yet (needs a transactional email " +
+      "provider — Resend and Brevo both have a free tier), so here's the " +
+      "link directly. In production this would be emailed, not shown here.",
+  });
+});
+
+app.get("/api/auth/verify", (req, res) => {
+  const result = accounts.verifyLink(req.query.token);
+  if (!result) {
+    return res.status(400).send(
+      'This login link is invalid or has expired. <a href="/login">Request a new one</a>.'
+    );
+  }
+  res.setHeader("Set-Cookie",
+    `session=${result.sessionToken}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}; ` +
+    `SameSite=Lax${req.secure ? "; Secure" : ""}`);
+  res.redirect("/cases");
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  accounts.destroySession(req.cookies.session);
+  res.setHeader("Set-Cookie", `session=; HttpOnly; Path=/; Max-Age=0${req.secure ? "; Secure" : ""}`);
+  res.json({ ok: true });
+});
+
+app.get("/api/me", (req, res) => res.json({ ok: true, account: req.account }));
+
+app.get("/cases", (req, res) => {
+  if (!req.account) return res.redirect("/login");
+  res.sendFile(process.cwd() + "/public/cases.html");
+});
+
+app.get("/api/cases", (req, res) => {
+  if (!req.account) return res.status(401).json({ ok: false, error: "Not signed in" });
+  res.json({ ok: true, email: req.account.email, alerts: audit.listOpenAlertsForAccount(req.account.id) });
+});
+
 app.get("/api/ledger", (_, res) => res.json(ledger));
 app.get("/api/audit", (_, res) => res.json(audit.list(200)));
 app.get("/api/verify/:ref", (req, res) => res.json(audit.verify(req.params.ref)));
@@ -168,6 +239,7 @@ app.post("/api/screen-free", async (req, res) => {
       topScore: b.hitCount ? b.hits[0].score : null,
       topMatch: b.hitCount ? b.hits[0].name : null,
       clientRef: "LANDING",
+      accountId: req.account?.id ?? null,
       pricePaid: 0.02,
       paymentTx: screen.line.tx,
     });
@@ -205,6 +277,7 @@ app.post("/api/screen-address", async (req, res) => {
       topScore: null,
       topMatch: b.sanctioned ? b.matches.map((m) => m.asset).join(", ") : null,
       clientRef: "LANDING-ADDRESS",
+      accountId: req.account?.id ?? null,
       pricePaid: 0.02,
       paymentTx: screen.line.tx,
     });
@@ -236,6 +309,7 @@ app.post("/api/check-website", async (req, res) => {
       topScore: null,
       topMatch: b.riskLevel,
       clientRef: "LANDING-WEBSITE",
+      accountId: req.account?.id ?? null,
       pricePaid: 0.02,
       paymentTx: check.line.tx,
     });
@@ -266,6 +340,7 @@ app.post("/api/check-email", async (req, res) => {
       topScore: null,
       topMatch: b.riskLevel,
       clientRef: "LANDING-EMAIL",
+      accountId: req.account?.id ?? null,
       pricePaid: 0.02,
       paymentTx: check.line.tx,
     });
@@ -282,7 +357,19 @@ app.post("/api/dispose", (req, res) => {
   const { reference, disposition } = req.body;
   if (!["cleared","escalated"].includes(disposition))
     return res.json({ ok: false, error: "Invalid disposition" });
-  res.json({ ok: true, record: audit.dispose(reference, disposition, "reviewer@demo") });
+
+  const existing = audit.get(reference);
+  if (!existing) return res.json({ ok: false, error: "No such check" });
+
+  // Checks run from a signed-in account's own queue can only be actioned by
+  // that account. Checks with no owner (the scripted /review demo) keep the
+  // old open behavior so that flow doesn't need a login.
+  if (existing.account_id && (!req.account || req.account.id !== existing.account_id)) {
+    return res.status(403).json({ ok: false, error: "Not signed in to the account that owns this check" });
+  }
+
+  const by = req.account?.email || "reviewer@demo";
+  res.json({ ok: true, record: audit.dispose(reference, disposition, by) });
 });
 
 app.listen(4030, () => console.log("Payment agent on http://localhost:4030"));
