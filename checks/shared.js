@@ -10,7 +10,10 @@
 import { promises as dns } from "dns";
 import tls from "tls";
 
-const FETCH_TIMEOUT_MS = 6000;
+// crt.sh and the rdap.org gateway are both known to be slow under load —
+// give them more room than a typical API timeout before giving up and
+// degrading to "unknown".
+const FETCH_TIMEOUT_MS = 9000;
 
 async function fetchJson(url, opts = {}) {
   const controller = new AbortController();
@@ -45,7 +48,7 @@ export function getCertInfo(host, port = 443) {
     const socket = tls.connect(
       { host, port, servername: host, timeout: FETCH_TIMEOUT_MS, rejectUnauthorized: false },
       () => {
-        const cert = socket.getCertificate();
+        const cert = socket.getPeerCertificate();
         socket.end();
         if (!cert || !cert.valid_from) return resolve(null);
         resolve({
