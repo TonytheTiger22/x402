@@ -53,17 +53,28 @@
  .foot p{color:var(--dim);font-size:14px;margin:0 0 14px}
  a{color:#1858c4}
  .err{color:var(--stop);font-size:14px;margin-top:10px}
+ .modes{display:flex;gap:8px;max-width:640px;margin:0 auto 0;padding:0 20px}
+ .mode{flex:1;font-size:14px;font-weight:650;padding:11px;border-radius:9px 9px 0 0;
+       border:1px solid var(--line);border-bottom:0;background:#f2f4f6;color:var(--dim);
+       cursor:pointer;text-align:center;position:relative;top:1px}
+ .mode.active{background:#fff;color:var(--ink);border-bottom:1px solid #fff}
 </style></head><body>
 
 <div class="hero">
- <span class="badge">LIVE DEMO &middot; BASE SEPOLIA TESTNET</span>
+ <span class="badge">LIVE DEMO &middot; BASE MAINNET</span>
  <h1>Screen anyone against global<br>sanctions lists. For 2&cent;.</h1>
  <p>No account. No contract. Pay per check, get a result in seconds &mdash;
-    with a timestamped record you can hand to an auditor.</p>
+    with a timestamped record you can hand to an auditor. Screen a name
+    or a crypto wallet address.</p>
 </div>
 
 <main>
- <div class="card">
+ <div class="modes">
+  <div class="mode active" id="tab-name">Screen a name</div>
+  <div class="mode" id="tab-address">Screen a wallet address</div>
+ </div>
+
+ <div class="card" id="card-name">
   <label>Full name <span style="color:var(--stop)">*</span></label>
   <input id="name" placeholder="e.g. Jane Doe">
 
@@ -94,11 +105,26 @@
   <div id="err" class="err"></div>
  </div>
 
+ <div class="card" id="card-address" style="display:none">
+  <label>Wallet address <span style="color:var(--stop)">*</span></label>
+  <input id="address" placeholder="e.g. a Bitcoin, Ethereum, Tron, Solana address...">
+
+  <div class="examples">
+   <span class="ex" id="ex-addr-clean">Try a clean address</span>
+   <span class="ex" id="ex-addr-hit">Try a sanctioned address</span>
+  </div>
+
+  <button class="go" id="go-address">Screen this address</button>
+  <div class="price">Costs 2&cent; &middot; exact match against OFAC's sanctioned
+   digital-currency address list</div>
+  <div id="err-address" class="err"></div>
+ </div>
+
  <div id="result" class="result"></div>
 
  <div class="foot">
   <p>This is a real, working API &mdash; not a mockup. Every check above just paid for
-     itself and settled on Base Sepolia.</p>
+     itself and settled on Base mainnet.</p>
   <a href="mailto:hello@example.com?subject=Sanctions%20screening%20API"><button class="g">Get API access &rarr;</button></a>
   <span style="display:inline-block;width:10px"></span>
   <a href="/"><button class="g">See the full review workflow &rarr;</button></a>
@@ -116,6 +142,19 @@ $("ex-hit").onclick=()=>{
  $("name").value="Viktor Petrov"; $("country").value="Bulgaria";
  $("dob").value="1978-09-03"; $("type").value="Individual";
 };
+
+$("tab-name").onclick=()=>{
+ $("tab-name").classList.add("active"); $("tab-address").classList.remove("active");
+ $("card-name").style.display=""; $("card-address").style.display="none";
+ $("result").innerHTML=""; $("err").textContent=""; $("err-address").textContent="";
+};
+$("tab-address").onclick=()=>{
+ $("tab-address").classList.add("active"); $("tab-name").classList.remove("active");
+ $("card-address").style.display=""; $("card-name").style.display="none";
+ $("result").innerHTML=""; $("err").textContent=""; $("err-address").textContent="";
+};
+$("ex-addr-clean").onclick=()=>{ $("address").value="1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"; };
+$("ex-addr-hit").onclick=()=>{ $("address").value="123WBUDmSJv4GctdVEz6Qq6z8nXSKrJ4KX"; };
 
 const STATUS_TAG={match:['y','agrees'],partial:['p','partial'],differs:['n','differs'],unknown:['u','no data']};
 function comparisonTable(fields){
@@ -175,6 +214,49 @@ $("go").onclick=async()=>{
   $("err").textContent=String(e);
  } finally {
   $("go").disabled=false; $("go").textContent="Screen this subject";
+ }
+};
+
+$("go-address").onclick=async()=>{
+ const address=$("address").value.trim();
+ $("err-address").textContent="";
+ if(!address){$("err-address").textContent="Enter an address to screen.";return;}
+
+ $("go-address").disabled=true; $("go-address").textContent="Screening… paying as it goes.";
+ $("result").innerHTML="";
+
+ try{
+  const res=await fetch("/api/screen-address",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({address})});
+  const r=await res.json();
+
+  if(!r.ok){$("err-address").textContent=r.error||"Something went wrong.";return;}
+
+  const b=r.screen;
+  const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
+
+  if(!b.sanctioned){
+   $("result").innerHTML='<div class="banner ok">Not on OFAC’s sanctioned address list.</div>'
+    +'<div class="card">'
+    +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+b.address+'</b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
+    +'<div class="meta">'+b.note+' Try the sanctioned-address example above to see a hit.</div>'
+    +'</div>';
+  } else {
+   $("result").innerHTML='<div class="banner warn">Match &mdash; on OFAC’s sanctioned '
+     +'digital-currency address list ('+b.matches.map(m=>m.asset).join(", ")+')</div>'
+    +'<div class="card">'
+    +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+b.address+'</b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
+    +'<div class="meta">'+b.note+'</div></div>';
+  }
+ } catch(e){
+  $("err-address").textContent=String(e);
+ } finally {
+  $("go-address").disabled=false; $("go-address").textContent="Screen this address";
  }
 };
 </script>

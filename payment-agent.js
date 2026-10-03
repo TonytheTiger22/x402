@@ -137,6 +137,36 @@ app.post("/api/screen-free", async (req, res) => {
   }
 });
 
+app.post("/api/screen-address", async (req, res) => {
+  const address = (req.body.address || "").trim();
+  if (!address) return res.json({ ok: false, error: "Address is required" });
+
+  try {
+    const screen = await buyQuery("/screen-address", { address },
+                                  "Crypto address screening", 0.02);
+    const b = screen.body;
+
+    const rec = audit.record({
+      subject: { name: address, dob: null, country: null },
+      listsChecked: [b.source],
+      listVersion: LIST_VERSION,
+      hitCount: b.sanctioned ? 1 : 0,
+      topScore: null,
+      topMatch: b.sanctioned ? b.matches.map((m) => m.asset).join(", ") : null,
+      clientRef: "LANDING-ADDRESS",
+      pricePaid: 0.02,
+      paymentTx: screen.line.tx,
+    });
+
+    if (!b.sanctioned) audit.dispose(rec.reference, "no_match_auto", "system");
+
+    res.json({ ok: true, screen: b, record: audit.get(rec.reference), ledger });
+
+  } catch (err) {
+    res.json({ ok: false, error: String(err), ledger });
+  }
+});
+
 app.post("/api/dispose", (req, res) => {
   const { reference, disposition } = req.body;
   if (!["cleared","escalated"].includes(disposition))
