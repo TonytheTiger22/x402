@@ -1,6 +1,6 @@
 {
   "name": "PayPerScreen",
-  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription.",
+  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription. Three tiers: raw data (every skill below), do-it-yourself case management (payperscreen.com/login), and an optional AI agent opinion layered on any check.",
   "url": "https://payperscreen.com",
   "documentationUrl": "https://payperscreen.com/docs",
   "version": "1.0.0",
@@ -104,6 +104,51 @@
         },
         "required": ["ip"]
       }
+    },
+    {
+      "id": "screen-opinion",
+      "name": "AI opinion: sanctions screening",
+      "description": "Tier 3. Re-runs screen-name, then asks an LLM to turn the result into a plain-English clear/review/escalate recommendation with reasoning. Narrates the existing result, never recomputes it.",
+      "method": "GET",
+      "path": "/screen/opinion",
+      "price": { "amount": "0.07", "currency": "USD" },
+      "inputSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
+    },
+    {
+      "id": "screen-address-opinion",
+      "name": "AI opinion: crypto address screening",
+      "description": "Tier 3 version of screen-address with an added LLM recommendation.",
+      "method": "GET",
+      "path": "/screen-address/opinion",
+      "price": { "amount": "0.07", "currency": "USD" },
+      "inputSchema": { "type": "object", "properties": { "address": { "type": "string" } }, "required": ["address"] }
+    },
+    {
+      "id": "screen-website-opinion",
+      "name": "AI opinion: website trust",
+      "description": "Tier 3 version of screen-website with an added LLM recommendation.",
+      "method": "GET",
+      "path": "/screen-website/opinion",
+      "price": { "amount": "0.07", "currency": "USD" },
+      "inputSchema": { "type": "object", "properties": { "url": { "type": "string" } }, "required": ["url"] }
+    },
+    {
+      "id": "screen-email-opinion",
+      "name": "AI opinion: email trust",
+      "description": "Tier 3 version of screen-email with an added LLM recommendation.",
+      "method": "GET",
+      "path": "/screen-email/opinion",
+      "price": { "amount": "0.07", "currency": "USD" },
+      "inputSchema": { "type": "object", "properties": { "email": { "type": "string" } }, "required": ["email"] }
+    },
+    {
+      "id": "screen-ip-opinion",
+      "name": "AI opinion: IP risk check",
+      "description": "Tier 3 version of screen-ip with an added LLM recommendation.",
+      "method": "GET",
+      "path": "/screen-ip/opinion",
+      "price": { "amount": "0.06", "currency": "USD" },
+      "inputSchema": { "type": "object", "properties": { "ip": { "type": "string" } }, "required": ["ip"] }
     }
   ],
   "referenceClient": "https://payperscreen.com/examples/agent-client.mjs"

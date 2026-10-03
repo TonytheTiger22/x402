@@ -464,6 +464,72 @@ app.post("/api/check-ip", async (req, res) => {
   }
 });
 
+// --- Tier 3: AI agent opinion. Re-screens via the matching /opinion route
+// on the compliance API (its own paid call, same as any other check), then
+// attaches the result to the case record a prior tier-1 check already
+// created — so a mom & pop looking at their case queue (tier 2) sees the
+// AI's read sitting right on the alert, instead of a disconnected 3rd item.
+
+const OPINION_ROUTES = {
+  name:    { path: "/screen/opinion",         price: 0.07, label: "AI opinion: sanctions screening" },
+  address: { path: "/screen-address/opinion", price: 0.07, label: "AI opinion: address screening" },
+  website: { path: "/screen-website/opinion", price: 0.07, label: "AI opinion: website trust" },
+  email:   { path: "/screen-email/opinion",   price: 0.07, label: "AI opinion: email trust" },
+  ip:      { path: "/screen-ip/opinion",      price: 0.06, label: "AI opinion: IP risk" },
+};
+
+app.post("/api/opinion", async (req, res) => {
+  const type = req.body.type;
+  const route = OPINION_ROUTES[type];
+  if (!route) return res.json({ ok: false, error: "Invalid check type" });
+
+  const params = {};
+  if (type === "name") {
+    params.name = (req.body.name || "").trim();
+    params.dob = req.body.dob || "";
+    params.country = req.body.country || "";
+    params.type = req.body.entityType || "Individual";
+    if (!params.name) return res.json({ ok: false, error: "Name is required" });
+  } else if (type === "address") {
+    params.address = (req.body.address || "").trim();
+    if (!params.address) return res.json({ ok: false, error: "Address is required" });
+  } else if (type === "website") {
+    params.url = (req.body.url || "").trim();
+    if (!params.url) return res.json({ ok: false, error: "A website address is required" });
+  } else if (type === "email") {
+    params.email = (req.body.email || "").trim();
+    if (!params.email) return res.json({ ok: false, error: "An email address is required" });
+  } else if (type === "ip") {
+    params.ip = (req.body.ip || "").trim();
+    if (!params.ip) return res.json({ ok: false, error: "An IP address is required" });
+  }
+
+  try {
+    const call = await buyQuery(route.path, params, route.label, route.price);
+    const b = call.body;
+    if (b.error) return res.json({ ok: false, error: b.error });
+    if (!b.opinion?.ok) {
+      return res.json({ ok: false, error: b.opinion?.error || "Could not get an AI opinion", ledger });
+    }
+
+    // Attach to the case record from the original check, if one was passed
+    // and it actually belongs to this account (or no one's signed in, same
+    // open-demo exception /api/dispose uses).
+    const reference = req.body.reference;
+    let record = null;
+    if (reference) {
+      const existing = audit.get(reference);
+      if (existing && (!existing.account_id || existing.account_id === req.account?.id || req.isAdmin)) {
+        record = audit.attachOpinion(reference, b.opinion);
+      }
+    }
+
+    res.json({ ok: true, opinion: b.opinion, record, ledger });
+  } catch (err) {
+    res.json({ ok: false, error: String(err), ledger });
+  }
+});
+
 app.post("/api/dispose", (req, res) => {
   const { reference, disposition } = req.body;
   if (!["cleared","escalated"].includes(disposition))

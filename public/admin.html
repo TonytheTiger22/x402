@@ -39,8 +39,12 @@
  .ok{background:#e6f4ec;color:var(--go)}
  .warn{background:#fdf3e3;color:var(--amber)}
  .bad{background:#fdeceb;color:var(--stop)}
+ .grey{background:#eef1f4;color:var(--dim)}
  .empty{padding:30px 10px;text-align:center;color:var(--dim)}
  .note{font-size:13px;color:var(--dim);margin-top:10px}
+ .kv{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;gap:16px}
+ .kv span:first-child{color:var(--dim)}
+ .kv b{text-align:right;word-break:break-word}
  .err{color:var(--stop);font-size:14px;margin-top:8px}
 </style></head><body><main>
 
@@ -97,6 +101,7 @@
   <div class="lbl">Open alerts — all accounts</div>
   <div id="tbl">Loading&hellip;</div>
  </div>
+ <div id="detail"></div>
 </div>
 
 <script>
@@ -135,14 +140,36 @@ function riskPill(r){
  return '<span class="pill warn">'+r.hit_count+' hit(s)</span>';
 }
 
+// Tier 3: shows up only if the account already paid for an AI opinion on
+// this check from the landing page.
+const AI_PILL_CLASS={clear:"ok",review:"warn",escalate:"bad"};
+function aiPill(r,i){
+ if(!r.ai_recommendation) return '<span class="pill grey">none yet</span>';
+ const cls=AI_PILL_CLASS[r.ai_recommendation]||"grey";
+ return '<button class="g" style="padding:2px 10px;border-radius:20px;font-size:11.5px" '
+  +'onclick="showOpinion('+i+')">'+esc(r.ai_recommendation)+'</button>';
+}
+
+window.showOpinion=(i)=>{
+ const r=rows[i];
+ let o={}; try{ o=JSON.parse(r.ai_opinion||"{}"); }catch{}
+ $("detail").innerHTML='<div class="card wide"><div class="lbl">AI opinion</div>'
+  +'<div class="kv"><span>Check</span><b><code>'+esc(r.reference)+'</code></b></div>'
+  +'<div class="kv"><span>Recommendation</span><b>'+esc(o.recommendation||"—")+'</b></div>'
+  +'<div class="kv"><span>Confidence</span><b>'+esc(o.confidence||"—")+'</b></div>'
+  +'<div class="note">'+esc(o.reasoning||"No reasoning recorded.")+'</div>'
+  +(o.disclaimer?'<div class="note" style="margin-top:8px;font-style:italic">'+esc(o.disclaimer)+'</div>':'')
+  +'</div>';
+};
+
 let rows=[];
 function draw(){
  if(!rows.length){ $("tbl").innerHTML='<div class="empty">No open alerts anywhere right now.</div>'; return; }
  $("tbl").innerHTML='<table><tr><th>Account</th><th>Type</th><th>Subject</th><th>Checked</th>'
- +'<th>Result</th><th>Reference</th><th></th></tr>'
+ +'<th>Result</th><th>AI opinion</th><th>Reference</th><th></th></tr>'
  +rows.map((r,i)=>'<tr><td>'+esc(r.account_email)+'</td><td>'+esc(TYPE_LABEL[r.client_ref]||r.client_ref||"—")
   +'</td><td>'+esc(r.subject_name)+'</td><td>'+when(r.performed_at)+'</td><td>'+riskPill(r)
-  +'</td><td><code>'+esc(r.reference)+'</code></td>'
+  +'</td><td>'+aiPill(r,i)+'</td><td><code>'+esc(r.reference)+'</code></td>'
   +'<td><div class="row">'
   +'<button class="clear" onclick="decide('+i+',\'cleared\')">Clear</button>'
   +'<button class="esc" onclick="decide('+i+',\'escalated\')">Escalate</button>'

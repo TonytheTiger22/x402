@@ -16,6 +16,14 @@ a riskLevel (low/medium/high) and a redFlag when a severe signal fires. It
 returns results and signals — it does not make compliance decisions for
 you.
 
+Three tiers sit on top of that data, additive, not exclusive: (1) raw
+data — every endpoint below, as-is; (2) do-it-yourself case management —
+sign in at /login and any flagged check lands in your own queue to clear
+or escalate; (3) AI agent opinion — a `.../opinion` endpoint per check that
+re-runs it and adds an LLM-generated clear/review/escalate recommendation
+with reasoning, narrating the deterministic signals rather than replacing
+them.
+
 ## Docs
 
 - [API reference](https://payperscreen.com/docs): endpoints, pricing, the
@@ -51,6 +59,10 @@ call the API — only to send a query, not to pay for gas.
   check, domain age, mailbox verification, blocklist status, typo-squat
 - `GET /screen-ip` — $0.01 (beta) — Spamhaus ZEN blocklist and Tor
   exit-node check, IPv4 only
+- `GET /screen/opinion`, `/screen-address/opinion`, `/screen-website/opinion`,
+  `/screen-email/opinion`, `/screen-ip/opinion` — tier 3, base price + $0.05
+  ($0.06 total for IP) — same params as the matching endpoint above, adds
+  an `opinion` object with an AI-generated clear/review/escalate call
 
 ## Optional
 
