@@ -208,6 +208,7 @@ const TEST_CASE_TYPES = {
   address: { clientRef: "LANDING-ADDRESS", lists: ["OFAC Crypto Addresses"] },
   website: { clientRef: "LANDING-WEBSITE", lists: ["Website trust signals"] },
   email:   { clientRef: "LANDING-EMAIL",   lists: ["Email trust signals"] },
+  ip:      { clientRef: "LANDING-IP",      lists: ["IP risk signals (beta)"] },
 };
 
 // Seeds a fake check straight into an account's queue — no payment, no
@@ -422,6 +423,36 @@ app.post("/api/check-email", async (req, res) => {
       clientRef: "LANDING-EMAIL",
       accountId: req.account?.id ?? null,
       pricePaid: 0.02,
+      paymentTx: check.line.tx,
+    });
+
+    if (b.riskLevel === "low") audit.dispose(rec.reference, "no_match_auto", "system");
+
+    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
+  } catch (err) {
+    res.json({ ok: false, error: String(err), ledger });
+  }
+});
+
+app.post("/api/check-ip", async (req, res) => {
+  const ip = (req.body.ip || "").trim();
+  if (!ip) return res.json({ ok: false, error: "An IP address is required" });
+
+  try {
+    const check = await buyQuery("/screen-ip", { ip }, "IP risk check", 0.01);
+    const b = check.body;
+    if (b.ok === false) return res.json({ ok: false, error: b.error || "Could not check that address" });
+
+    const rec = audit.record({
+      subject: { name: b.ip, dob: null, country: null },
+      listsChecked: ["IP risk signals (beta)"],
+      listVersion: LIST_VERSION,
+      hitCount: b.flagCount,
+      topScore: null,
+      topMatch: b.riskLevel,
+      clientRef: "LANDING-IP",
+      accountId: req.account?.id ?? null,
+      pricePaid: 0.01,
       paymentTx: check.line.tx,
     });
 

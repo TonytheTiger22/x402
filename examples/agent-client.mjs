@@ -10,6 +10,7 @@
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs address 0x1234...
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs website example.com
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs email someone@example.com
+//   PRIVATE_KEY=0x... node examples/agent-client.mjs ip 1.2.3.4
 //
 // Requirements on your wallet:
 //   - Real USDC on Base mainnet (this hits production, not a testnet).
@@ -84,6 +85,12 @@ async function screenEmail(email) {
   console.log(JSON.stringify(result, null, 2));
 }
 
+async function screenIp(ip) {
+  console.log(`Checking IP "${ip}" ($0.01)...`);
+  const result = await callPaid("/screen-ip", { ip });
+  console.log(JSON.stringify(result, null, 2));
+}
+
 const [, , cmd, ...args] = process.argv;
 
 if (cmd === "screen" && args[0]) {
@@ -94,11 +101,14 @@ if (cmd === "screen" && args[0]) {
   await screenWebsite(args[0]);
 } else if (cmd === "email" && args[0]) {
   await screenEmail(args[0]);
+} else if (cmd === "ip" && args[0]) {
+  await screenIp(args[0]);
 } else {
   console.log("Usage:");
   console.log('  PRIVATE_KEY=0x... node examples/agent-client.mjs screen "Jane Doe"');
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs address 0x1234...");
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs website example.com");
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs email someone@example.com");
+  console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs ip 1.2.3.4");
   process.exit(1);
 }

@@ -27,8 +27,8 @@
   "@type": "Service",
   "name": "PayPerScreen",
   "url": "https://payperscreen.com",
-  "description": "Pay-per-call sanctions and crypto-wallet address screening API, priced in USDC and authenticated entirely by x402 micropayments — no account, no API key, no subscription.",
-  "serviceType": "Sanctions and crypto-address screening API",
+  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening API, priced in USDC and authenticated entirely by x402 micropayments — no account, no API key, no subscription.",
+  "serviceType": "Sanctions, fraud, and risk screening API",
   "provider": { "@type": "Organization", "name": "PayPerScreen" },
   "areaServed": "Worldwide",
   "audience": {
@@ -56,6 +56,27 @@
       "price": "0.02",
       "priceCurrency": "USD",
       "description": "Exact-match lookup against OFAC's sanctioned digital-currency address list."
+    },
+    {
+      "@type": "Offer",
+      "name": "Website trust check",
+      "price": "0.02",
+      "priceCurrency": "USD",
+      "description": "Deterministic composite of domain age, SSL certificate, certificate history, SPF, redirect behavior, security headers, and web-archive history."
+    },
+    {
+      "@type": "Offer",
+      "name": "Email trust check",
+      "price": "0.02",
+      "priceCurrency": "USD",
+      "description": "Deterministic composite of mail-server validity, disposable-domain detection, domain age, mailbox verification, blocklist status, and typo-squat detection."
+    },
+    {
+      "@type": "Offer",
+      "name": "IP risk check (beta)",
+      "price": "0.01",
+      "priceCurrency": "USD",
+      "description": "Known-high-risk-IP check against the Spamhaus ZEN blocklist and the Tor exit-node list."
     }
   ],
   "termsOfService": "https://payperscreen.com/docs"
@@ -184,9 +205,10 @@
 <main class="layout">
  <div class="lede">
   <h2 class="headline">Screen anyone against global sanctions lists.</h2>
-  <p class="subhead">Or check whether a crypto wallet address is sanctioned.
-     No account, no contract — pay per check and walk away with a
-     timestamped record you can hand to an auditor.</p>
+  <p class="subhead">Or check a crypto wallet address, a website, an email
+     address, or an IP address for known risk signals. No account, no
+     contract — pay per check and walk away with a timestamped record
+     you can hand to an auditor.</p>
 
   <div class="stats">
    <div class="stat"><span class="stat-num">2&cent;</span><span class="stat-label">per check</span></div>
@@ -209,6 +231,7 @@
    <button class="mode" id="tab-address">Wallet address</button>
    <button class="mode" id="tab-website">Website</button>
    <button class="mode" id="tab-email">Email</button>
+   <button class="mode" id="tab-ip">IP address</button>
   </div>
 
   <div id="card-name">
@@ -288,6 +311,21 @@
    <div id="err-email" class="err"></div>
   </div>
 
+  <div id="card-ip" style="display:none">
+   <label>IP address <span class="req">(required)</span></label>
+   <input id="ip" placeholder="e.g. 1.2.3.4">
+
+   <div class="examples">
+    <span class="ex" id="ex-ip">Try an example address</span>
+   </div>
+
+   <button class="go" id="go-ip">Check this IP</button>
+   <div class="price">Costs 1¢. Beta &mdash; two known-high-risk-IP
+    lists (Spamhaus blocklist, Tor exit nodes), both checked live.
+    IPv4 only for now.</div>
+   <div id="err-ip" class="err"></div>
+  </div>
+
   <div id="result" class="result"></div>
  </div>
 </main>
@@ -320,14 +358,14 @@ $("ex-hit").onclick=()=>{
  $("dob").value="1978-09-03"; $("type").value="Individual";
 };
 
-const TABS=["name","address","website","email"];
+const TABS=["name","address","website","email","ip"];
 function showTab(active){
  TABS.forEach(t=>{
   $("tab-"+t).classList.toggle("active", t===active);
   $("card-"+t).style.display = t===active ? "" : "none";
  });
  $("result").innerHTML="";
- ["err","err-address","err-website","err-email"].forEach(id=>{ if($(id)) $(id).textContent=""; });
+ ["err","err-address","err-website","err-email","err-ip"].forEach(id=>{ if($(id)) $(id).textContent=""; });
 }
 $("tab-name").onclick=()=>showTab("name");
 $("tab-address").onclick=()=>showTab("address");
@@ -338,6 +376,10 @@ $("ex-addr-clean").onclick=()=>{ $("address").value="1BvBMSEYstWetqTFn5Au4m4GFg7
 $("ex-addr-hit").onclick=()=>{ $("address").value="123WBUDmSJv4GctdVEz6Qq6z8nXSKrJ4KX"; };
 $("ex-website").onclick=()=>{ $("website").value="google.com"; };
 $("ex-email").onclick=()=>{ $("email").value="info@google.com"; };
+// A known Tor exit node or blocklisted IP would make a better "hit"
+// example, but both lists rotate constantly — a hardcoded one would go
+// stale. 1.1.1.1 is a stable, real public IP that should come back clean.
+$("ex-ip").onclick=()=>{ $("ip").value="1.1.1.1"; };
 
 const STATUS_TAG={match:['y','agrees'],partial:['p','partial'],differs:['n','differs'],unknown:['u','no data']};
 function comparisonTable(fields){
@@ -526,6 +568,38 @@ $("go-email").onclick=async()=>{
   $("err-email").textContent=String(e);
  } finally {
   $("go-email").disabled=false; $("go-email").textContent="Check this email";
+ }
+};
+
+$("go-ip").onclick=async()=>{
+ const ip=$("ip").value.trim();
+ $("err-ip").textContent="";
+ if(!ip){$("err-ip").textContent="Enter an IP address to check.";return;}
+
+ $("go-ip").disabled=true; $("go-ip").textContent="Checking… paying as it goes.";
+ $("result").innerHTML="";
+
+ try{
+  const res=await fetch("/api/check-ip",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ip})});
+  const r=await res.json();
+
+  if(!r.ok){$("err-ip").textContent=r.error||"Something went wrong.";return;}
+
+  const b=r.check;
+  const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
+
+  $("result").innerHTML=riskBanner(b, b.ip)
+   +'<div class="card">'+signalsTable(b.signals)
+   +'<div class="meta">'+esc(b.note)+'</div></div>'
+   +'<div class="card">'
+   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
+   +'<div class="kv"><span>Cost</span><b>1&cent; &middot; '+ms+' ms</b></div></div>';
+ } catch(e){
+  $("err-ip").textContent=String(e);
+ } finally {
+  $("go-ip").disabled=false; $("go-ip").textContent="Check this IP";
  }
 };
 </script>

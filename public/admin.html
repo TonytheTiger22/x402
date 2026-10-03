@@ -74,6 +74,7 @@
      <option value="address">Wallet address</option>
      <option value="website">Website</option>
      <option value="email">Email</option>
+     <option value="ip">IP address</option>
     </select>
    </div>
    <div>
@@ -125,7 +126,7 @@ $("signout").onclick=async()=>{
 };
 
 const TYPE_LABEL={"LANDING":"Name","LANDING-ADDRESS":"Wallet address",
- "LANDING-WEBSITE":"Website","LANDING-EMAIL":"Email"};
+ "LANDING-WEBSITE":"Website","LANDING-EMAIL":"Email","LANDING-IP":"IP address"};
 function riskPill(r){
  const t=r.top_match;
  if(t==="high") return '<span class="pill bad">high risk</span>';

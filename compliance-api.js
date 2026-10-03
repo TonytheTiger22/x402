@@ -6,6 +6,7 @@ import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 import { runWebsiteChecks } from "./checks/website-trust.js";
 import { runEmailChecks } from "./checks/email-trust.js";
+import { runIpChecks } from "./checks/ip-trust.js";
 
 // Base mainnet (CAIP-2). Was "eip155:84532" (Base Sepolia testnet).
 const NETWORK = "eip155:8453";
@@ -102,6 +103,19 @@ app.use(paymentMiddleware(
         },
         output: {
           example: { email: "someone@example.com", riskLevel: "low", redFlag: false, flagCount: 0, signals: [] },
+        },
+      }),
+    }),
+    "GET /screen-ip": priced("$0.01", "IP risk check (beta)", {
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { ip: "1.2.3.4" },
+        inputSchema: {
+          properties: { ip: { type: "string", description: "A public IPv4 address to check" } },
+          required: ["ip"],
+        },
+        output: {
+          example: { ip: "1.2.3.4", riskLevel: "low", redFlag: false, flagCount: 0, signals: [] },
         },
       }),
     }),
@@ -272,6 +286,17 @@ app.get("/screen-email", async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Email check failed", detail: String(err?.message || err) });
+  }
+});
+
+app.get("/screen-ip", async (req, res) => {
+  const ip = (req.query.ip || "").trim();
+  if (!ip) return res.json({ error: "ip is required" });
+  try {
+    const result = await runIpChecks(ip);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "IP check failed", detail: String(err?.message || err) });
   }
 });
 

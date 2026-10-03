@@ -119,6 +119,49 @@ export async function spamhausCheck(ip) {
   }
 }
 
+// RDAP for IP allocations (different endpoint shape than the domain one
+// above) — who an IP block is allocated to and what country it's
+// registered in. Purely descriptive context, not a risk signal on its
+// own: plenty of legitimate traffic comes from datacenter/cloud IPs.
+export async function rdapLookupIp(ip) {
+  const data = await fetchJson(`https://rdap.org/ip/${encodeURIComponent(ip)}`);
+  if (!data) return null;
+  return { name: data.name ?? null, country: data.country ?? null, handle: data.handle ?? null };
+}
+
+// The Tor Project publishes its own exit-node list, free, no key, updated
+// continuously. It's a few thousand lines, so we cache it for an hour
+// instead of refetching on every check — and serve a stale cache rather
+// than nothing if a refetch fails.
+let torExitCache = { set: null, fetchedAt: 0 };
+const TOR_CACHE_TTL_MS = 60 * 60 * 1000;
+
+async function fetchTorExitSet() {
+  if (torExitCache.set && Date.now() - torExitCache.fetchedAt < TOR_CACHE_TTL_MS) {
+    return torExitCache.set;
+  }
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch("https://check.torproject.org/torbulkexitlist", { signal: controller.signal });
+    if (!res.ok) return torExitCache.set ?? null;
+    const text = await res.text();
+    const set = new Set(text.split("\n").map((l) => l.trim()).filter(Boolean));
+    torExitCache = { set, fetchedAt: Date.now() };
+    return set;
+  } catch {
+    return torExitCache.set ?? null; // stale-if-error beats "unknown" on a transient blip
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export async function torExitNodeCheck(ip) {
+  const set = await fetchTorExitSet();
+  if (!set) return null;
+  return { isExitNode: set.has(ip) };
+}
+
 export function daysSince(isoDate) {
   if (!isoDate) return null;
   const then = new Date(isoDate).getTime();

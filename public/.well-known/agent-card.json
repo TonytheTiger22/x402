@@ -1,6 +1,6 @@
 {
   "name": "PayPerScreen",
-  "description": "Pay-per-call sanctions and crypto-wallet address screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription.",
+  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription.",
   "url": "https://payperscreen.com",
   "documentationUrl": "https://payperscreen.com/docs",
   "version": "1.0.0",
@@ -58,6 +58,51 @@
           "address": { "type": "string", "description": "Wallet address on any supported chain" }
         },
         "required": ["address"]
+      }
+    },
+    {
+      "id": "screen-website",
+      "name": "Website trust check",
+      "description": "Deterministic composite of domain age, SSL certificate, certificate history, SPF, redirect behavior, security headers, and web-archive history. Returns riskLevel (low/medium/high) and redFlag.",
+      "method": "GET",
+      "path": "/screen-website",
+      "price": { "amount": "0.02", "currency": "USD" },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "A URL or bare domain to check" }
+        },
+        "required": ["url"]
+      }
+    },
+    {
+      "id": "screen-email",
+      "name": "Email trust check",
+      "description": "Deterministic composite of mail-server validity, disposable-domain detection, domain age, mailbox verification, blocklist status, MX provider, and typo-squat detection. Returns riskLevel (low/medium/high) and redFlag.",
+      "method": "GET",
+      "path": "/screen-email",
+      "price": { "amount": "0.02", "currency": "USD" },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "description": "Email address to check" }
+        },
+        "required": ["email"]
+      }
+    },
+    {
+      "id": "screen-ip",
+      "name": "IP risk check (beta)",
+      "description": "Known-high-risk-IP check against the Spamhaus ZEN blocklist and the Tor exit-node list. IPv4 only. Returns riskLevel (low/medium/high) and redFlag.",
+      "method": "GET",
+      "path": "/screen-ip",
+      "price": { "amount": "0.01", "currency": "USD" },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ip": { "type": "string", "description": "A public IPv4 address to check" }
+        },
+        "required": ["ip"]
       }
     }
   ],
