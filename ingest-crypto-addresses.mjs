@@ -35,39 +35,52 @@ const client = new pg.Client({
 });
 
 await client.connect();
-console.log("Clearing old crypto-address entries...");
-await client.query("DELETE FROM sanctioned_addresses WHERE source = $1", [SOURCE]);
 
-let total = 0;
-for (const asset of ASSETS) {
-  const url = `${RAW_BASE}/sanctioned_addresses_${asset}.txt`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    console.log(`  ${asset}: fetch failed (${res.status}), skipping`);
-    continue;
-  }
-  const text = await res.text();
-  const addresses = text.split("\n").map((l) => l.trim()).filter(Boolean);
+// Wrapped in a transaction for the same reason as ingest-ofac-full.mjs: a
+// mid-run failure must roll back to the previous data, never leave the
+// live-queried table emptied out.
+try {
+  await client.query("BEGIN");
+  console.log("Clearing old crypto-address entries...");
+  await client.query("DELETE FROM sanctioned_addresses WHERE source = $1", [SOURCE]);
 
-  for (const address of addresses) {
-    const addressNormalized = normalize(asset, address);
-    await client.query(
-      `INSERT INTO sanctioned_addresses (source, asset, address, address_normalized)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (source, asset, address_normalized) DO NOTHING`,
-      [SOURCE, asset, address, addressNormalized]
-    );
+  let total = 0;
+  for (const asset of ASSETS) {
+    const url = `${RAW_BASE}/sanctioned_addresses_${asset}.txt`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.log(`  ${asset}: fetch failed (${res.status}), skipping`);
+      continue;
+    }
+    const text = await res.text();
+    const addresses = text.split("\n").map((l) => l.trim()).filter(Boolean);
+
+    for (const address of addresses) {
+      const addressNormalized = normalize(asset, address);
+      await client.query(
+        `INSERT INTO sanctioned_addresses (source, asset, address, address_normalized)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (source, asset, address_normalized) DO NOTHING`,
+        [SOURCE, asset, address, addressNormalized]
+      );
+    }
+    console.log(`  ${asset}: ${addresses.length} addresses`);
+    total += addresses.length;
   }
-  console.log(`  ${asset}: ${addresses.length} addresses`);
-  total += addresses.length;
+
+  await client.query(
+    `INSERT INTO list_metadata (source, list_version, refreshed_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (source) DO UPDATE SET list_version = $2, refreshed_at = now()`,
+    [SOURCE, new Date().toISOString().slice(0, 10)]
+  );
+
+  await client.query("COMMIT");
+  console.log(`Done. ${total} addresses across ${ASSETS.length} assets.`);
+} catch (err) {
+  await client.query("ROLLBACK");
+  console.error("Ingest failed — rolled back, previous crypto-address data is untouched.", err);
+  process.exitCode = 1;
+} finally {
+  await client.end();
 }
-
-await client.query(
-  `INSERT INTO list_metadata (source, list_version, refreshed_at)
-   VALUES ($1, $2, now())
-   ON CONFLICT (source) DO UPDATE SET list_version = $2, refreshed_at = now()`,
-  [SOURCE, new Date().toISOString().slice(0, 10)]
-);
-
-console.log(`Done. ${total} addresses across ${ASSETS.length} assets.`);
-await client.end();

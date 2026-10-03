@@ -100,6 +100,8 @@
 
 <script>
 const $=(i)=>document.getElementById(i);
+const ESC_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,(c)=>ESC_MAP[c]);
 const when=(s)=>new Date(s).toLocaleString("en-GB",{day:"2-digit",month:"short",
                  hour:"2-digit",minute:"2-digit"});
 
@@ -137,9 +139,9 @@ function draw(){
  if(!rows.length){ $("tbl").innerHTML='<div class="empty">No open alerts anywhere right now.</div>'; return; }
  $("tbl").innerHTML='<table><tr><th>Account</th><th>Type</th><th>Subject</th><th>Checked</th>'
  +'<th>Result</th><th>Reference</th><th></th></tr>'
- +rows.map((r,i)=>'<tr><td>'+r.account_email+'</td><td>'+(TYPE_LABEL[r.client_ref]||r.client_ref||"—")
-  +'</td><td>'+r.subject_name+'</td><td>'+when(r.performed_at)+'</td><td>'+riskPill(r)
-  +'</td><td><code>'+r.reference+'</code></td>'
+ +rows.map((r,i)=>'<tr><td>'+esc(r.account_email)+'</td><td>'+esc(TYPE_LABEL[r.client_ref]||r.client_ref||"—")
+  +'</td><td>'+esc(r.subject_name)+'</td><td>'+when(r.performed_at)+'</td><td>'+riskPill(r)
+  +'</td><td><code>'+esc(r.reference)+'</code></td>'
   +'<td><div class="row">'
   +'<button class="clear" onclick="decide('+i+',\'cleared\')">Clear</button>'
   +'<button class="esc" onclick="decide('+i+',\'escalated\')">Escalate</button>'

@@ -1,8 +1,5 @@
-import Database from "better-sqlite3";
 import { createHash, randomUUID } from "crypto";
-
-const db = new Database("audit.db");
-db.pragma("journal_mode = WAL");
+import { db } from "./db.js";
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS checks (

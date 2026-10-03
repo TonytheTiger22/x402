@@ -56,6 +56,8 @@
 </main>
 <script>
 const $=(i)=>document.getElementById(i);
+const ESC_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,(c)=>ESC_MAP[c]);
 const when=(s)=>new Date(s).toLocaleString("en-GB",{day:"2-digit",month:"short",
                  hour:"2-digit",minute:"2-digit"});
 let rows=[];
@@ -83,8 +85,8 @@ function draw(){
  }
  $("tbl").innerHTML='<table><tr><th>Type</th><th>Subject</th><th>Checked</th>'
  +'<th>Result</th><th>Reference</th><th></th></tr>'
- +rows.map((r,i)=>'<tr><td>'+typeOf(r)+'</td><td>'+r.subject_name+'</td><td>'+when(r.performed_at)
-  +'</td><td>'+riskPill(r)+'</td><td><code>'+r.reference+'</code></td>'
+ +rows.map((r,i)=>'<tr><td>'+esc(typeOf(r))+'</td><td>'+esc(r.subject_name)+'</td><td>'+when(r.performed_at)
+  +'</td><td>'+riskPill(r)+'</td><td><code>'+esc(r.reference)+'</code></td>'
   +'<td><div class="row">'
   +'<button class="clear" onclick="decide('+i+',\'cleared\')">Clear</button>'
   +'<button class="esc" onclick="decide('+i+',\'escalated\')">Escalate</button>'
@@ -100,9 +102,9 @@ window.decide=async(i,disposition)=>{
  const d=await res.json();
  if(!d.ok){alert(d.error||"Couldn't record that decision.");return;}
  $("detail").innerHTML='<div class="card"><div class="lbl">Decision recorded</div>'
-  +'<div class="kv"><span>Check</span><b><code>'+r.reference+'</code></b></div>'
-  +'<div class="kv"><span>Outcome</span><b>'+disposition+'</b></div>'
-  +'<div class="kv"><span>By</span><b>'+(d.record.disposed_by||"")+'</b></div>'
+  +'<div class="kv"><span>Check</span><b><code>'+esc(r.reference)+'</code></b></div>'
+  +'<div class="kv"><span>Outcome</span><b>'+esc(disposition)+'</b></div>'
+  +'<div class="kv"><span>By</span><b>'+esc(d.record.disposed_by||"")+'</b></div>'
   +'<div class="note">Recorded in the audit trail. This alert is now off the open queue.</div></div>';
  load();
 };
@@ -110,7 +112,7 @@ window.decide=async(i,disposition)=>{
 async function load(){
  const r=await(await fetch("/api/cases")).json();
  if(!r.ok){ location.href="/login"; return; }
- $("who").innerHTML=r.email+'<button id="signout">Sign out</button>';
+ $("who").innerHTML=esc(r.email)+'<button id="signout">Sign out</button>';
  $("signout").onclick=async()=>{ await fetch("/api/auth/logout",{method:"POST"}); location.href="/login"; };
  rows=r.alerts; draw();
 }

@@ -303,6 +303,8 @@
 
 <script>
 const $=(i)=>document.getElementById(i);
+const ESC_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,(c)=>ESC_MAP[c]);
 
 $("ex-clean").onclick=()=>{
  $("name").value="Maria Santos Oliveira"; $("country").value="Portugal";
@@ -337,9 +339,9 @@ function comparisonTable(fields){
  const rows=fields.map(f=>{
    const st=f.status||(f.agree?'match':'differs');
    const [cls,label]=STATUS_TAG[st]||STATUS_TAG.unknown;
-   return '<tr class="'+(st==='differs'?'no':'')+'"><td>'+f.field+'</td><td>'
-    +f.subject+'</td><td>'+f.listed+'</td><td><span class="tag '+cls+'">'+label+'</span>'
-    +(f.note?'<span class="fnote">'+f.note+'</span>':'')+'</td></tr>';
+   return '<tr class="'+(st==='differs'?'no':'')+'"><td>'+esc(f.field)+'</td><td>'
+    +esc(f.subject)+'</td><td>'+esc(f.listed)+'</td><td><span class="tag '+cls+'">'+label+'</span>'
+    +(f.note?'<span class="fnote">'+esc(f.note)+'</span>':'')+'</td></tr>';
  }).join('');
  return '<table><tr><th>Field</th><th>You entered</th><th>Listed party</th><th></th></tr>'+rows+'</table>';
 }
@@ -367,21 +369,21 @@ $("go").onclick=async()=>{
   if(r.outcome==="clear"){
    $("result").innerHTML='<div class="banner ok">No match found across 4 lists.</div>'
     +'<div class="card">'
-    +'<div class="kv"><span>Subject</span><b>'+r.screen.subject.name+'</b></div>'
-    +'<div class="kv"><span>Lists checked</span><b>'+r.screen.listsChecked.join(", ")+'</b></div>'
-    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Subject</span><b>'+esc(r.screen.subject.name)+'</b></div>'
+    +'<div class="kv"><span>Lists checked</span><b>'+esc(r.screen.listsChecked.join(", "))+'</b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
     +'<div class="meta">Recorded with a hash of the check facts, so this result cannot be '
     +'backdated or altered after the fact. Try the sanctioned-name example above to see a match.</div>'
     +'</div>';
   } else {
    $("result").innerHTML='<div class="banner warn">Possible match &mdash; '
-     +r.screen.hits[0].name+', '+r.screen.hits[0].list+', score '+r.screen.hits[0].score+'</div>'
+     +esc(r.screen.hits[0].name)+', '+esc(r.screen.hits[0].list)+', score '+r.screen.hits[0].score+'</div>'
     +'<div class="card">'+comparisonTable(r.context.fields)
-    +'<div class="meta">'+r.context.meta.list+' '+r.context.meta.listVersion+' &middot; '
-      +r.context.meta.program+' &middot; matched on: '+r.context.meta.matchedOn+'</div></div>'
+    +'<div class="meta">'+esc(r.context.meta.list)+' '+esc(r.context.meta.listVersion)+' &middot; '
+      +esc(r.context.meta.program)+' &middot; matched on: '+esc(r.context.meta.matchedOn)+'</div></div>'
     +'<div class="card">'
-    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
     +'<div class="meta">This is a match result and a field comparison only. What you do with it '
     +'&mdash; clear, escalate, hold a payment &mdash; is entirely your own process.</div></div>';
@@ -415,19 +417,19 @@ $("go-address").onclick=async()=>{
   if(!b.sanctioned){
    $("result").innerHTML='<div class="banner ok">Not on OFAC’s sanctioned address list.</div>'
     +'<div class="card">'
-    +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+b.address+'</b></div>'
-    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+esc(b.address)+'</b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
-    +'<div class="meta">'+b.note+' Try the sanctioned-address example above to see a hit.</div>'
+    +'<div class="meta">'+esc(b.note)+' Try the sanctioned-address example above to see a hit.</div>'
     +'</div>';
   } else {
    $("result").innerHTML='<div class="banner warn">Match &mdash; on OFAC’s sanctioned '
-     +'digital-currency address list ('+b.matches.map(m=>m.asset).join(", ")+')</div>'
+     +'digital-currency address list ('+esc(b.matches.map(m=>m.asset).join(", "))+')</div>'
     +'<div class="card">'
-    +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+b.address+'</b></div>'
-    +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+    +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+esc(b.address)+'</b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
-    +'<div class="meta">'+b.note+'</div></div>';
+    +'<div class="meta">'+esc(b.note)+'</div></div>';
   }
  } catch(e){
   $("err-address").textContent=String(e);
@@ -442,18 +444,18 @@ function signalsTable(signals){
  const rows=signals.map(s=>{
   const tag = s.status==="pass" ? "y" : s.status==="flag" ? "n" : "u";
   const label = s.status==="pass" ? "ok" : s.status==="flag" ? "flag" : "unknown";
-  return '<tr class="'+(s.status==="flag"?"no":"")+'"><td>'+s.label+'</td><td><span class="tag '
-   +tag+'">'+label+'</span></td><td>'+s.detail+'</td></tr>';
+  return '<tr class="'+(s.status==="flag"?"no":"")+'"><td>'+esc(s.label)+'</td><td><span class="tag '
+   +tag+'">'+label+'</span></td><td>'+esc(s.detail)+'</td></tr>';
  }).join('');
  return '<table><tr><th>Signal</th><th></th><th>Detail</th></tr>'+rows+'</table>';
 }
 function riskBanner(b, subject){
  const banner=RISK_BANNER[b.riskLevel]||"partial";
  const label=RISK_LABEL[b.riskLevel]||b.riskLevel;
- let html='<div class="banner '+banner+'">'+(b.redFlag?'\u{1F6A9} ':'')+label+' &mdash; '+subject
+ let html='<div class="banner '+banner+'">'+(b.redFlag?'\u{1F6A9} ':'')+label+' &mdash; '+esc(subject)
    +' ('+b.flagCount+' flag(s), '+b.unknownCount+' unknown)</div>';
  if(b.redFlag && b.redFlagSignals?.length){
-  html+='<div class="redflag">Red flag: '+b.redFlagSignals.join(", ")+'</div>';
+  html+='<div class="redflag">Red flag: '+esc(b.redFlagSignals.join(", "))+'</div>';
  }
  return html;
 }
@@ -479,9 +481,9 @@ $("go-website").onclick=async()=>{
 
   $("result").innerHTML=riskBanner(b, b.domain)
    +'<div class="card">'+signalsTable(b.signals)
-   +'<div class="meta">'+b.note+'</div></div>'
+   +'<div class="meta">'+esc(b.note)+'</div></div>'
    +'<div class="card">'
-   +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
    +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
   $("err-website").textContent=String(e);
@@ -511,9 +513,9 @@ $("go-email").onclick=async()=>{
 
   $("result").innerHTML=riskBanner(b, b.email)
    +'<div class="card">'+signalsTable(b.signals)
-   +'<div class="meta">'+b.note+'</div></div>'
+   +'<div class="meta">'+esc(b.note)+'</div></div>'
    +'<div class="card">'
-   +'<div class="kv"><span>Check reference</span><b><code>'+r.record.reference+'</code></b></div>'
+   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
    +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
   $("err-email").textContent=String(e);

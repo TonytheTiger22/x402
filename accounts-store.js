@@ -10,11 +10,8 @@
 // Sessions and accounts live in the same sqlite file as the audit trail —
 // one small file, no new infrastructure.
 
-import Database from "better-sqlite3";
 import { randomUUID, timingSafeEqual } from "crypto";
-
-const db = new Database("audit.db");
-db.pragma("journal_mode = WAL");
+import { db } from "./db.js";
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS accounts (

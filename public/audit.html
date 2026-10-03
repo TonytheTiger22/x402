@@ -67,6 +67,8 @@
 const $=(i)=>document.getElementById(i);
 const when=(s)=>new Date(s).toLocaleString("en-GB",{day:"2-digit",month:"short",
                  hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const ESC_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,(c)=>ESC_MAP[c]);
 let rows=[];
 
 function pill(r){
@@ -80,20 +82,20 @@ function draw(){
  if(!rows.length){$("tbl").innerHTML="No checks recorded yet. Run one from the demo.";return;}
  $("tbl").innerHTML='<table><tr><th>Reference</th><th>Performed</th><th>Subject</th>'
  +'<th>Your ref</th><th>List version</th><th>Hits</th><th>Status</th><th>Cost</th></tr>'
- +rows.map((r,i)=>'<tr onclick="show('+i+')"><td><code>'+r.reference+'</code></td><td>'
-  +when(r.performed_at)+'</td><td>'+r.subject_name+'</td><td>'+(r.client_ref||"&mdash;")
-  +'</td><td><code>'+r.list_version+'</code></td><td>'+r.hit_count+'</td><td>'+pill(r)
+ +rows.map((r,i)=>'<tr onclick="show('+i+')"><td><code>'+esc(r.reference)+'</code></td><td>'
+  +when(r.performed_at)+'</td><td>'+esc(r.subject_name)+'</td><td>'+(r.client_ref?esc(r.client_ref):"&mdash;")
+  +'</td><td><code>'+esc(r.list_version)+'</code></td><td>'+r.hit_count+'</td><td>'+pill(r)
   +'</td><td>'+(r.price_paid?(r.price_paid*100).toFixed(0)+"\u00A2":"&mdash;")+'</td></tr>').join('')
  +'</table>';
 }
 
 window.show=(i)=>{
  const r=rows[i];
- $("detail").innerHTML='<div class="card"><div class="lbl">Record '+r.reference+'</div>'
- +Object.entries(r).map(([k,v])=>'<div class="kv"><span>'+k.replace(/_/g," ")+'</span><b>'
+ $("detail").innerHTML='<div class="card"><div class="lbl">Record '+esc(r.reference)+'</div>'
+ +Object.entries(r).map(([k,v])=>'<div class="kv"><span>'+esc(k.replace(/_/g," "))+'</span><b>'
    +(v===null?"&mdash;":(k==="payment_tx"&&v
-     ?'<a target="_blank" href="https://sepolia.basescan.org/tx/'+v+'">'+v.slice(0,20)+'\u2026</a>'
-     :String(v)))+'</b></div>').join('')
+     ?'<a target="_blank" href="https://sepolia.basescan.org/tx/'+encodeURIComponent(v)+'">'+esc(v.slice(0,20))+'\u2026</a>'
+     :esc(String(v))))+'</b></div>').join('')
  +'<div class="note">The record hash commits to the check facts only \u2014 not to the '
  +'disposition, which may legitimately change later.</div></div>';
  $("detail").scrollIntoView({behavior:"smooth"});
@@ -105,12 +107,12 @@ $("vf").onclick=async()=>{
  const v=await(await fetch("/api/verify/"+encodeURIComponent(ref))).json();
  if(!v.found){$("vout").innerHTML='<div class="note">No record with that reference.</div>';return;}
  $("vout").innerHTML='<div class="note">'
-  +'<div class="kv"><span>Stored hash</span><b><code>'+v.stored.slice(0,26)+'\u2026</code></b></div>'
-  +'<div class="kv"><span>Recomputed now</span><b><code>'+v.recomputed.slice(0,26)+'\u2026</code></b></div>'
+  +'<div class="kv"><span>Stored hash</span><b><code>'+esc(v.stored.slice(0,26))+'\u2026</code></b></div>'
+  +'<div class="kv"><span>Recomputed now</span><b><code>'+esc(v.recomputed.slice(0,26))+'\u2026</code></b></div>'
   +'<div class="kv"><span>Result</span><b>'+(v.intact
     ?'<span class="pill ok">intact</span>':'<span class="pill bad">altered</span>')+'</b></div>'
   +'<div style="margin-top:10px">Canonical form hashed:</div>'
-  +'<code style="word-break:break-all">'+v.canonical+'</code></div>';
+  +'<code style="word-break:break-all">'+esc(v.canonical)+'</code></div>';
 };
 
 async function load(){rows=await(await fetch("/api/audit")).json();draw();}

@@ -88,7 +88,7 @@ app.use(paymentMiddleware(
           required: ["url"],
         },
         output: {
-          example: { domain: "example.com", verdict: "clear", flagCount: 0, signals: [] },
+          example: { domain: "example.com", riskLevel: "low", redFlag: false, flagCount: 0, signals: [] },
         },
       }),
     }),
@@ -101,7 +101,7 @@ app.use(paymentMiddleware(
           required: ["email"],
         },
         output: {
-          example: { email: "someone@example.com", verdict: "clear", flagCount: 0, signals: [] },
+          example: { email: "someone@example.com", riskLevel: "low", redFlag: false, flagCount: 0, signals: [] },
         },
       }),
     }),

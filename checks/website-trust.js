@@ -21,14 +21,24 @@ function parseUrl(input) {
   }
 }
 
+// One overall time budget for the whole chain, not 6s per hop — a
+// malicious or slow-loris redirect chain shouldn't be able to make this
+// paid check take up to 36s (6 hops x 6s) before giving up.
+const REDIRECT_CHAIN_BUDGET_MS = 10000;
+
 async function checkRedirectChain(url) {
   const hops = [];
   let current = url;
+  const deadline = Date.now() + REDIRECT_CHAIN_BUDGET_MS;
   for (let i = 0; i < 6; i++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      return { status: "unknown", detail: "Redirect chain check timed out", hops };
+    }
     let res;
     try {
       const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 6000);
+      const t = setTimeout(() => controller.abort(), remaining);
       res = await fetch(current, { redirect: "manual", signal: controller.signal });
       clearTimeout(t);
     } catch {
