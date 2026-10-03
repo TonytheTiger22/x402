@@ -15,7 +15,7 @@ This API is built around the assumption that most real callers will be
 autonomous agent that holds its own wallet and can sign a payment without
 a human in the loop. That's the native use case x402 was designed for, and
 it's the integration this document covers. See
-[`examples/agent-client.mjs`](../examples/agent-client.mjs) for a working,
+[`examples/agent-client.mjs`](/examples/agent-client.mjs) for a working,
 copy-pasteable reference client.
 
 ## Base URL

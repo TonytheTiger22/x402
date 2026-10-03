@@ -30,6 +30,7 @@
     "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
     "fast-xml-parser": "^5.11.1",
+    "marked": "^18.0.14",
     "pg": "^8.23.0",
     "viem": "^2.55.18"
   }

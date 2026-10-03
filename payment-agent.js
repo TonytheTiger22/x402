@@ -3,6 +3,8 @@ import { wrapFetchWithPayment, x402HTTPClient } from "@x402/fetch";
 import { x402Client } from "@x402/core/client";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
+import { marked } from "marked";
+import { readFileSync } from "fs";
 import * as audit from "./audit-store.js";
 
 const signer = privateKeyToAccount(process.env.BUYER_KEY);
@@ -43,11 +45,19 @@ const buy = (path, id, label, price) => buyQuery(path, { id }, label, price);
 const app = express();
 app.use(express.json());
 app.use(express.static("public"));
+app.use("/examples", express.static("examples"));
 app.get("/", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
 app.get("/audit", (_, res) => res.sendFile(process.cwd() + "/public/audit.html"));
 app.get("/review", (_, res) => res.sendFile(process.cwd() + "/public/compliance.html"));
 // Old path kept working in case anything still links to it.
 app.get("/landing", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
+
+app.get("/docs", (_, res) => {
+  const md = readFileSync(process.cwd() + "/docs/API.md", "utf8");
+  const html = marked.parse(md);
+  const template = readFileSync(process.cwd() + "/public/docs-template.html", "utf8");
+  res.send(template.replace("__CONTENT__", html));
+});
 app.get("/api/ledger", (_, res) => res.json(ledger));
 app.get("/api/audit", (_, res) => res.json(audit.list(200)));
 app.get("/api/verify/:ref", (req, res) => res.json(audit.verify(req.params.ref)));
