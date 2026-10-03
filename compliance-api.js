@@ -4,6 +4,8 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
+import { runWebsiteChecks } from "./checks/website-trust.js";
+import { runEmailChecks } from "./checks/email-trust.js";
 
 // Base mainnet (CAIP-2). Was "eip155:84532" (Base Sepolia testnet).
 const NETWORK = "eip155:8453";
@@ -74,6 +76,32 @@ app.use(paymentMiddleware(
         },
         output: {
           example: { address: "0x...", sanctioned: false, matches: [] },
+        },
+      }),
+    }),
+    "GET /screen-website": priced("$0.02", "Website trust check", {
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { url: "https://example.com" },
+        inputSchema: {
+          properties: { url: { type: "string", description: "A URL or bare domain to check" } },
+          required: ["url"],
+        },
+        output: {
+          example: { domain: "example.com", verdict: "clear", flagCount: 0, signals: [] },
+        },
+      }),
+    }),
+    "GET /screen-email": priced("$0.02", "Email trust check", {
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { email: "someone@example.com" },
+        inputSchema: {
+          properties: { email: { type: "string", description: "Email address to check" } },
+          required: ["email"],
+        },
+        output: {
+          example: { email: "someone@example.com", verdict: "clear", flagCount: 0, signals: [] },
         },
       }),
     }),
@@ -223,6 +251,28 @@ app.get("/screen-address", async (req, res) => {
           "name, DOB, or program per address. \"Not sanctioned\" reflects " +
           "this list only, not a guarantee the address is clean.",
   });
+});
+
+app.get("/screen-website", async (req, res) => {
+  const url = (req.query.url || "").trim();
+  if (!url) return res.json({ error: "url is required" });
+  try {
+    const result = await runWebsiteChecks(url);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Website check failed", detail: String(err?.message || err) });
+  }
+});
+
+app.get("/screen-email", async (req, res) => {
+  const email = (req.query.email || "").trim();
+  if (!email) return res.json({ error: "email is required" });
+  try {
+    const result = await runEmailChecks(email);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Email check failed", detail: String(err?.message || err) });
+  }
 });
 
 app.get("/screen", async (req, res) => {
