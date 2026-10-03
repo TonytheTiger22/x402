@@ -1,0 +1,48 @@
+# PayPerScreen
+
+> Pay-per-call sanctions and crypto-wallet address screening API, priced in
+> USDC and paid over [x402](https://x402.org) — no account, no API key, no
+> subscription. Every request is authenticated by a signed on-chain payment
+> at the moment it's made, on Base mainnet. Built around the assumption that
+> most real callers are agents, not humans clicking a button.
+
+PayPerScreen checks names against the OFAC Specially Designated Nationals
+(SDN) list (fuzzy match) and crypto wallet addresses against OFAC's
+sanctioned digital-currency address list (exact match). It returns a result
+and a field-by-field comparison — it does not make compliance decisions for
+you.
+
+## Docs
+
+- [API reference](https://payperscreen.com/docs): endpoints, pricing, the
+  x402 payment handshake, request/response shapes, and honest current
+  coverage.
+- [Lists we check](https://payperscreen.com/lists): live record counts and
+  last-refreshed dates for every list currently loaded — not a marketing
+  description, the actual database state.
+- [Reference client](https://payperscreen.com/examples/agent-client.mjs): a
+  standalone Node.js script an agent can run directly — reads a private key
+  from the environment, pays per call, no other setup.
+- [Agent card](https://payperscreen.com/.well-known/agent-card.json):
+  machine-readable service descriptor (skills, pricing, payment scheme).
+
+## How payment works
+
+No API key, no signup. A request with no payment gets back `402 Payment
+Required` naming the exact price, network (`eip155:8453`, Base mainnet),
+and asset (USDC). The caller signs a gasless EIP-3009
+`transferWithAuthorization` and retries with it attached; x402-aware HTTP
+clients (e.g. `@x402/fetch`) do this automatically. No ETH is needed to
+call the API — only to send a query, not to pay for gas.
+
+## Endpoints (see /docs for full detail)
+
+- `GET /screen` — $0.02 — fuzzy name match against OFAC SDN
+- `GET /context` — $0.05 — field-by-field comparison for a prior hit
+- `GET /screen-address` — $0.02 — exact match against OFAC's sanctioned
+  crypto-address list
+
+## Optional
+
+- [payperscreen.com](https://payperscreen.com): the web UI for humans —
+  same API underneath, same live payments.

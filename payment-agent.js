@@ -46,6 +46,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static("public"));
 app.use("/examples", express.static("examples"));
+// express.static ignores dotfiles/dot-directories by default, so
+// /.well-known needs an explicit route.
+app.get("/.well-known/agent-card.json", (_, res) =>
+  res.sendFile(process.cwd() + "/public/.well-known/agent-card.json", { dotfiles: "allow" }));
 app.get("/", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
 app.get("/audit", (_, res) => res.sendFile(process.cwd() + "/public/audit.html"));
 app.get("/review", (_, res) => res.sendFile(process.cwd() + "/public/compliance.html"));

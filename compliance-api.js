@@ -3,6 +3,7 @@ import pg from "pg";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
+import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 
 // Base mainnet (CAIP-2). Was "eip155:84532" (Base Sepolia testnet).
 const NETWORK = "eip155:8453";
@@ -19,18 +20,67 @@ const pool = new pg.Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-const priced = (price, description) => ({
+const priced = (price, description, extras = {}) => ({
   accepts: [{ scheme: "exact", price, network: NETWORK, payTo: SELLER }],
   description, mimeType: "application/json",
+  serviceName: "PayPerScreen",
+  tags: ["compliance", "sanctions", "ofac", "crypto", "kyc", "aml"],
+  ...extras,
 });
 
+// Bazaar discovery metadata — lets x402 facilitators that support the
+// extension (CDP's does) catalog these routes so agents can find them
+// without already knowing the URL. Purely additive: has no effect on the
+// payment flow itself, only on whether the route shows up in a discovery
+// listing.
 app.use(paymentMiddleware(
   {
-    "GET /screen":         priced("$0.02", "Sanctions screening"),
-    "GET /context":        priced("$0.05", "Field comparison"),
-    "GET /screen-address": priced("$0.02", "Crypto address screening"),
+    "GET /screen": priced("$0.02", "Sanctions screening", {
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { name: "Jane Doe", dob: "", country: "", type: "Individual" },
+        inputSchema: {
+          properties: {
+            name: { type: "string", description: "Full name to screen" },
+            dob: { type: "string", description: "YYYY-MM-DD, optional" },
+            country: { type: "string", description: "Nationality, optional" },
+            type: { type: "string", enum: ["Individual", "Entity"] },
+          },
+          required: ["name"],
+        },
+        output: {
+          example: { subject: { name: "Jane Doe" }, listsChecked: ["OFAC SDN"], hitCount: 0, hits: [] },
+        },
+      }),
+    }),
+    "GET /context": priced("$0.05", "Field comparison", {
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { name: "Jane Doe" },
+        inputSchema: {
+          properties: { name: { type: "string", description: "Same query as a prior /screen hit" } },
+          required: ["name"],
+        },
+        output: { example: { fields: [], meta: {} } },
+      }),
+    }),
+    "GET /screen-address": priced("$0.02", "Crypto address screening", {
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x0000000000000000000000000000000000dEaD" },
+        inputSchema: {
+          properties: { address: { type: "string", description: "Wallet address on any supported chain" } },
+          required: ["address"],
+        },
+        output: {
+          example: { address: "0x...", sanctioned: false, matches: [] },
+        },
+      }),
+    }),
   },
-  new x402ResourceServer(facilitator).register(NETWORK, new ExactEvmScheme()),
+  new x402ResourceServer(facilitator)
+    .register(NETWORK, new ExactEvmScheme())
+    .registerExtension(bazaarResourceServerExtension),
 ));
 
 const SUBJECTS = {

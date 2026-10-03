@@ -1,0 +1,65 @@
+{
+  "name": "PayPerScreen",
+  "description": "Pay-per-call sanctions and crypto-wallet address screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription.",
+  "url": "https://payperscreen.com",
+  "documentationUrl": "https://payperscreen.com/docs",
+  "version": "1.0.0",
+  "apiBaseUrl": "https://keen-solace-production-b976.up.railway.app",
+  "apiBaseUrlNote": "Provisional Railway-assigned hostname. All skill paths below are relative to this base, not to payperscreen.com. See documentationUrl for the live source of truth if this changes.",
+  "provider": {
+    "name": "PayPerScreen",
+    "url": "https://payperscreen.com"
+  },
+  "payment": {
+    "protocol": "x402",
+    "scheme": "exact",
+    "network": "eip155:8453",
+    "chain": "Base mainnet",
+    "asset": "USDC",
+    "spec": "https://x402.org"
+  },
+  "skills": [
+    {
+      "id": "screen-name",
+      "name": "Sanctions name screening",
+      "description": "Fuzzy name match against the OFAC Specially Designated Nationals (SDN) list.",
+      "method": "GET",
+      "path": "/screen",
+      "price": { "amount": "0.02", "currency": "USD" },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Full name to screen" },
+          "dob": { "type": "string", "description": "YYYY-MM-DD, optional" },
+          "country": { "type": "string", "description": "Nationality, optional" },
+          "type": { "type": "string", "enum": ["Individual", "Entity"], "default": "Individual" }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "id": "context",
+      "name": "Field comparison",
+      "description": "Field-by-field comparison between a screened subject and the matched sanctions record from a prior /screen hit.",
+      "method": "GET",
+      "path": "/context",
+      "price": { "amount": "0.05", "currency": "USD" }
+    },
+    {
+      "id": "screen-address",
+      "name": "Crypto wallet address screening",
+      "description": "Exact-match lookup against OFAC's sanctioned digital-currency address list.",
+      "method": "GET",
+      "path": "/screen-address",
+      "price": { "amount": "0.02", "currency": "USD" },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "string", "description": "Wallet address on any supported chain" }
+        },
+        "required": ["address"]
+      }
+    }
+  ],
+  "referenceClient": "https://payperscreen.com/examples/agent-client.mjs"
+}
