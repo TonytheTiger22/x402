@@ -76,6 +76,7 @@ export async function runWebsiteChecks(input) {
   signals.push({
     id: "domain_age",
     label: "Domain registration age",
+    severity: "minor", // young domains are common for legitimate new projects too
     status: rdapAgeDays == null ? "unknown" : rdapAgeDays < AGE_FLAG_DAYS ? "flag" : "pass",
     detail: rdapAgeDays == null
       ? "Registration date not available (RDAP lookup failed or privacy-protected)"
@@ -95,13 +96,18 @@ export async function runWebsiteChecks(input) {
       ? "Certificate did not validate against trusted roots"
       : `Valid, issued by ${cert.issuer || "unknown issuer"}, expires ${cert.validTo.slice(0, 10)}`;
   }
-  signals.push({ id: "ssl_certificate", label: "SSL certificate", status: certStatus, detail: certDetail });
+  signals.push({
+    id: "ssl_certificate", label: "SSL certificate",
+    severity: "critical", // an expired/untrusted cert is a direct, unambiguous problem
+    status: certStatus, detail: certDetail,
+  });
 
   // 3. Certificate Transparency history
   const ctAgeDays = crt?.earliestCertAt ? daysSince(crt.earliestCertAt) : null;
   signals.push({
     id: "cert_transparency",
     label: "Certificate history (crt.sh)",
+    severity: "minor",
     status: ctAgeDays == null ? "unknown" : ctAgeDays < AGE_FLAG_DAYS ? "flag" : "pass",
     detail: ctAgeDays == null
       ? "No certificate history found"
@@ -115,6 +121,7 @@ export async function runWebsiteChecks(input) {
   signals.push({
     id: "email_auth",
     label: "Email authentication (SPF)",
+    severity: "minor", // common for small/static sites that send no mail at all
     status: hasSpf ? "pass" : "flag",
     detail: hasSpf ? "SPF record present" : "No SPF record found on the apex domain",
   });
@@ -123,6 +130,7 @@ export async function runWebsiteChecks(input) {
   signals.push({
     id: "redirect_chain",
     label: "Redirect behavior",
+    severity: "critical", // landing on an unrelated domain is a strong phishing/hijack signal
     status: redirectResult.status,
     detail: redirectResult.detail,
   });
@@ -135,11 +143,12 @@ export async function runWebsiteChecks(input) {
     signals.push({
       id: "security_headers",
       label: "Security headers",
+      severity: "minor",
       status: hasHsts || hasCsp ? "pass" : "flag",
       detail: [hasHsts && "HSTS", hasCsp && "CSP"].filter(Boolean).join(", ") || "Neither HSTS nor CSP present",
     });
   } else {
-    signals.push({ id: "security_headers", label: "Security headers", status: "unknown", detail: "Site was unreachable" });
+    signals.push({ id: "security_headers", label: "Security headers", severity: "minor", status: "unknown", detail: "Site was unreachable" });
   }
 
   // 7. Wayback Machine presence
@@ -147,6 +156,7 @@ export async function runWebsiteChecks(input) {
   signals.push({
     id: "wayback_history",
     label: "Web archive history",
+    severity: "minor",
     status: waybackAgeDays == null ? "unknown" : "pass",
     detail: waybackAgeDays == null
       ? "No archived snapshots found"
@@ -155,13 +165,21 @@ export async function runWebsiteChecks(input) {
 
   const flagCount = signals.filter((s) => s.status === "flag").length;
   const unknownCount = signals.filter((s) => s.status === "unknown").length;
-  const verdict = flagCount === 0 ? "clear" : flagCount <= 2 ? "some_concerns" : "high_risk";
+  const criticalFlags = signals.filter((s) => s.status === "flag" && s.severity === "critical");
+  const minorFlagCount = flagCount - criticalFlags.length;
+  const redFlag = criticalFlags.length > 0;
+  // A critical signal (bad cert, hijacked redirect) overrides everything else —
+  // that's the whole point of calling it critical. Otherwise risk scales with
+  // how many minor signals flagged.
+  const riskLevel = redFlag ? "high" : minorFlagCount === 0 ? "low" : minorFlagCount <= 2 ? "medium" : "high";
 
   return {
     ok: true,
     domain,
     checkedAt: new Date().toISOString(),
-    verdict,
+    riskLevel,
+    redFlag,
+    redFlagSignals: criticalFlags.map((s) => s.label),
     flagCount,
     unknownCount,
     signalsChecked: signals.length,
@@ -169,7 +187,7 @@ export async function runWebsiteChecks(input) {
     note: "Deterministic checks only — no AI/LLM scoring. Three further signals " +
       "(malware/phishing blocklist, URL reputation aggregator, hosting " +
       "reputation) are designed but not yet live — they need a free API key " +
-      "that hasn't been provisioned. A 'clear' verdict reflects only the " +
+      "that hasn't been provisioned. A 'low risk' result reflects only the " +
       "signals listed above, not a guarantee the site is safe.",
   };
 }

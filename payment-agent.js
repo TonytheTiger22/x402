@@ -234,13 +234,13 @@ app.post("/api/check-website", async (req, res) => {
       listVersion: LIST_VERSION,
       hitCount: b.flagCount,
       topScore: null,
-      topMatch: b.verdict,
+      topMatch: b.riskLevel,
       clientRef: "LANDING-WEBSITE",
       pricePaid: 0.02,
       paymentTx: check.line.tx,
     });
 
-    if (b.verdict === "clear") audit.dispose(rec.reference, "no_match_auto", "system");
+    if (b.riskLevel === "low") audit.dispose(rec.reference, "no_match_auto", "system");
 
     res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
   } catch (err) {
@@ -264,13 +264,13 @@ app.post("/api/check-email", async (req, res) => {
       listVersion: LIST_VERSION,
       hitCount: b.flagCount,
       topScore: null,
-      topMatch: b.verdict,
+      topMatch: b.riskLevel,
       clientRef: "LANDING-EMAIL",
       pricePaid: 0.02,
       paymentTx: check.line.tx,
     });
 
-    if (b.verdict === "clear") audit.dispose(rec.reference, "no_match_auto", "system");
+    if (b.riskLevel === "low") audit.dispose(rec.reference, "no_match_auto", "system");
 
     res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
   } catch (err) {

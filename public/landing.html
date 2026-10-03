@@ -148,6 +148,9 @@
          margin-bottom:6px}
  .banner.ok{border-color:var(--ok)}
  .banner.warn{border-color:var(--warn)}
+ .banner.partial{border-color:var(--partial)}
+ .banner.bad{border-color:var(--warn);background:rgba(166,25,46,.06);padding-top:8px;padding-bottom:8px}
+ .redflag{font:600 14.5px var(--sans);color:var(--warn);margin:4px 0 2px 18px}
  .card{border-top:1px solid var(--rule);padding:16px 0 2px;margin-top:4px}
  .kv{display:flex;justify-content:space-between;padding:8px 0;font-size:14.5px;gap:14px;
      border-bottom:1px solid var(--rule)}
@@ -432,8 +435,8 @@ $("go-address").onclick=async()=>{
  }
 };
 
-const VERDICT_BANNER={clear:"ok", some_concerns:"warn", high_risk:"warn"};
-const VERDICT_LABEL={clear:"Clear", some_concerns:"Some concerns", high_risk:"High risk"};
+const RISK_BANNER={low:"ok", medium:"partial", high:"bad"};
+const RISK_LABEL={low:"Low risk", medium:"Medium risk", high:"High risk"};
 function signalsTable(signals){
  const rows=signals.map(s=>{
   const tag = s.status==="pass" ? "y" : s.status==="flag" ? "n" : "u";
@@ -442,6 +445,16 @@ function signalsTable(signals){
    +tag+'">'+label+'</span></td><td>'+s.detail+'</td></tr>';
  }).join('');
  return '<table><tr><th>Signal</th><th></th><th>Detail</th></tr>'+rows+'</table>';
+}
+function riskBanner(b, subject){
+ const banner=RISK_BANNER[b.riskLevel]||"partial";
+ const label=RISK_LABEL[b.riskLevel]||b.riskLevel;
+ let html='<div class="banner '+banner+'">'+(b.redFlag?'\u{1F6A9} ':'')+label+' &mdash; '+subject
+   +' ('+b.flagCount+' flag(s), '+b.unknownCount+' unknown)</div>';
+ if(b.redFlag && b.redFlagSignals?.length){
+  html+='<div class="redflag">Red flag: '+b.redFlagSignals.join(", ")+'</div>';
+ }
+ return html;
 }
 
 $("go-website").onclick=async()=>{
@@ -462,11 +475,8 @@ $("go-website").onclick=async()=>{
 
   const b=r.check;
   const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
-  const banner=VERDICT_BANNER[b.verdict]||"warn";
-  const label=VERDICT_LABEL[b.verdict]||b.verdict;
 
-  $("result").innerHTML='<div class="banner '+banner+'">'+label+' &mdash; '+b.domain
-    +' ('+b.flagCount+' flag(s), '+b.unknownCount+' unknown)</div>'
+  $("result").innerHTML=riskBanner(b, b.domain)
    +'<div class="card">'+signalsTable(b.signals)
    +'<div class="meta">'+b.note+'</div></div>'
    +'<div class="card">'
@@ -497,11 +507,8 @@ $("go-email").onclick=async()=>{
 
   const b=r.check;
   const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
-  const banner=VERDICT_BANNER[b.verdict]||"warn";
-  const label=VERDICT_LABEL[b.verdict]||b.verdict;
 
-  $("result").innerHTML='<div class="banner '+banner+'">'+label+' &mdash; '+b.email
-    +' ('+b.flagCount+' flag(s), '+b.unknownCount+' unknown)</div>'
+  $("result").innerHTML=riskBanner(b, b.email)
    +'<div class="card">'+signalsTable(b.signals)
    +'<div class="meta">'+b.note+'</div></div>'
    +'<div class="card">'

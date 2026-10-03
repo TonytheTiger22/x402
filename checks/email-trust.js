@@ -104,6 +104,7 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "syntax_mx",
     label: "Syntax and mail server",
+    severity: "critical", // a domain that can't receive mail at all is disqualifying
     status: hasMx ? "pass" : "flag",
     detail: hasMx ? `Domain accepts mail (${dns.mx[0].exchange})` : "Domain has no MX record — cannot receive mail",
   });
@@ -113,6 +114,7 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "disposable_domain",
     label: "Disposable email provider",
+    severity: "critical", // throwaway mailboxes are a strong, direct fraud signal
     status: disposable ? "flag" : "pass",
     detail: disposable ? "Domain is a known disposable/temp-mail provider" : "Not on the known disposable-domain list",
   });
@@ -122,6 +124,7 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "free_mail",
     label: "Provider type",
+    severity: "minor",
     status: "pass", // informational, not a red flag either way
     detail: isFreeMail ? "Consumer free-mail provider" : "Custom/corporate domain",
   });
@@ -131,6 +134,7 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "domain_age",
     label: "Domain registration age",
+    severity: "minor",
     status: ageDays == null ? "unknown" : ageDays < 30 ? "flag" : "pass",
     detail: ageDays == null ? "Registration date not available" : `Registered ${ageDays} day(s) ago`,
   });
@@ -140,6 +144,7 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "cert_transparency",
     label: "Domain certificate history",
+    severity: "minor",
     status: ctAgeDays == null ? "unknown" : "pass",
     detail: ctAgeDays == null ? "No certificate history found for this domain" : `Earliest logged certificate ${ctAgeDays} day(s) ago`,
   });
@@ -147,9 +152,9 @@ export async function runEmailChecks(input) {
   // 6. SMTP mailbox probe (best-effort)
   if (hasMx) {
     const probe = await smtpProbe(dns.mx[0].exchange, email);
-    signals.push({ id: "mailbox_probe", label: "Mailbox verification", status: probe.status, detail: probe.detail });
+    signals.push({ id: "mailbox_probe", label: "Mailbox verification", severity: "critical", status: probe.status, detail: probe.detail });
   } else {
-    signals.push({ id: "mailbox_probe", label: "Mailbox verification", status: "unknown", detail: "Skipped — no mail server to probe" });
+    signals.push({ id: "mailbox_probe", label: "Mailbox verification", severity: "critical", status: "unknown", detail: "Skipped — no mail server to probe" });
   }
 
   // 7. DNSBL (Spamhaus) on the mail server's IP
@@ -165,7 +170,7 @@ export async function runEmailChecks(input) {
       }
     } catch {}
   }
-  signals.push({ id: "dnsbl", label: "Mail server reputation (DNSBL)", status: dnsblStatus, detail: dnsblDetail });
+  signals.push({ id: "dnsbl", label: "Mail server reputation (DNSBL)", severity: "critical", status: dnsblStatus, detail: dnsblDetail });
 
   // 8. MX provider fingerprinting
   const mxHost = dns?.mx?.[0]?.exchange || "";
@@ -173,6 +178,7 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "mx_provider",
     label: "Mail provider",
+    severity: "minor",
     status: "pass",
     detail: knownProvider ? `Hosted on ${knownProvider.name}` : mxHost ? `Custom/unrecognized mail infrastructure (${mxHost})` : "No mail server found",
   });
@@ -187,6 +193,7 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "typosquat",
     label: "Look-alike domain check",
+    severity: "critical", // a deliberate look-alike is a strong phishing signal
     status: typoMatch ? "flag" : "pass",
     detail: typoMatch ? `Domain closely resembles ${typoMatch} — possible typo-squat` : "No resemblance to major free-mail providers detected",
   });
@@ -197,19 +204,25 @@ export async function runEmailChecks(input) {
   signals.push({
     id: "role_account",
     label: "Account type",
+    severity: "minor",
     status: "pass", // informational
     detail: isRole ? "Looks like a shared/role account, not an individual" : "Looks like a personal account",
   });
 
   const flagCount = signals.filter((s) => s.status === "flag").length;
   const unknownCount = signals.filter((s) => s.status === "unknown").length;
-  const verdict = flagCount === 0 ? "clear" : flagCount <= 2 ? "some_concerns" : "high_risk";
+  const criticalFlags = signals.filter((s) => s.status === "flag" && s.severity === "critical");
+  const minorFlagCount = flagCount - criticalFlags.length;
+  const redFlag = criticalFlags.length > 0;
+  const riskLevel = redFlag ? "high" : minorFlagCount === 0 ? "low" : minorFlagCount <= 2 ? "medium" : "high";
 
   return {
     ok: true,
     email,
     checkedAt: new Date().toISOString(),
-    verdict,
+    riskLevel,
+    redFlag,
+    redFlagSignals: criticalFlags.map((s) => s.label),
     flagCount,
     unknownCount,
     signalsChecked: signals.length,
@@ -217,6 +230,6 @@ export async function runEmailChecks(input) {
     note: "Deterministic checks only — no AI/LLM scoring. The mailbox-" +
       "verification probe is best-effort: some mail servers block it or " +
       "accept every address, which shows up as 'unknown', not as a clean " +
-      "result. A 'clear' verdict reflects only the signals listed above.",
+      "result. A 'low risk' result reflects only the signals listed above.",
   };
 }
