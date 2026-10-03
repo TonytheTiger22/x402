@@ -43,8 +43,10 @@ const buy = (path, id, label, price) => buyQuery(path, { id }, label, price);
 const app = express();
 app.use(express.json());
 app.use(express.static("public"));
-app.get("/", (_, res) => res.sendFile(process.cwd() + "/public/compliance.html"));
+app.get("/", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
 app.get("/audit", (_, res) => res.sendFile(process.cwd() + "/public/audit.html"));
+app.get("/review", (_, res) => res.sendFile(process.cwd() + "/public/compliance.html"));
+// Old path kept working in case anything still links to it.
 app.get("/landing", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
 app.get("/api/ledger", (_, res) => res.json(ledger));
 app.get("/api/audit", (_, res) => res.json(audit.list(200)));
