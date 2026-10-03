@@ -26,8 +26,9 @@ const priced = (price, description) => ({
 
 app.use(paymentMiddleware(
   {
-    "GET /screen":  priced("$0.02", "Sanctions screening"),
-    "GET /context": priced("$0.05", "Field comparison"),
+    "GET /screen":         priced("$0.02", "Sanctions screening"),
+    "GET /context":        priced("$0.05", "Field comparison"),
+    "GET /screen-address": priced("$0.02", "Crypto address screening"),
   },
   new x402ResourceServer(facilitator).register(NETWORK, new ExactEvmScheme()),
 ));
@@ -102,6 +103,43 @@ async function bestMatch(name) {
   );
   return rows[0] || null;
 }
+
+// Exact-match lookup for sanctioned crypto wallet addresses — a different
+// data source and match type from bestMatch() above. See
+// ingest-crypto-addresses.mjs for provenance and known limitations
+// (no linked entity name/DOB; see the project's list-management roadmap).
+const EVM_ASSETS = new Set(["ETH", "USDT", "USDC", "ARB", "BSC", "ETC"]);
+const looksLikeEvm = (address) => address.toLowerCase().startsWith("0x");
+
+async function lookupAddress(rawAddress) {
+  const address = rawAddress.trim();
+  const normalized = looksLikeEvm(address) ? address.toLowerCase() : address;
+
+  const { rows } = await pool.query(
+    `SELECT asset, address, source FROM sanctioned_addresses
+     WHERE address_normalized = $1`,
+    [normalized]
+  );
+  return rows;
+}
+
+app.get("/screen-address", async (req, res) => {
+  const address = (req.query.address || "").trim();
+  if (!address) return res.json({ error: "address is required" });
+
+  const matches = await lookupAddress(address);
+
+  res.json({
+    address,
+    screenedAt: new Date().toISOString(),
+    sanctioned: matches.length > 0,
+    matches: matches.map((m) => ({ asset: m.asset, source: m.source })),
+    source: "OFAC SDN digital currency addresses",
+    note: "Exact address match only — this source has no linked entity " +
+          "name, DOB, or program per address. \"Not sanctioned\" reflects " +
+          "this list only, not a guarantee the address is clean.",
+  });
+});
 
 app.get("/screen", async (req, res) => {
   if (req.query.id) {
