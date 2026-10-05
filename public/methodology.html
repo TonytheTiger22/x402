@@ -101,24 +101,25 @@
 
  <table>
   <tr><th>What we check</th><th></th></tr>
-  <tr><td class="sig">List coverage</td><td>OFAC Specially Designated Nationals (SDN) list — <b>that list only</b>. See <a href="/lists">/lists</a> for the live record count and when it was last refreshed.</td></tr>
+  <tr><td class="sig">List coverage</td><td>Sanctions lists loaded in our database: OFAC SDN, UN Security Council Consolidated List, EU Consolidated Financial Sanctions List, UK Sanctions List (FCDO). <b>Only lists that are actually loaded are checked</b> — every response names them in <code>listsChecked</code>, and <a href="/lists">/lists</a> shows the live record count and last refresh date per list.</td></tr>
   <tr><td class="sig">Match method</td><td>Trigram similarity against both primary names and known aliases — not an exact string match, so minor spelling differences, transliteration, and word-order changes can still surface a match.</td></tr>
-  <tr><td class="sig">What's returned</td><td>Only the single highest-scoring candidate above an internal similarity threshold — not every candidate, not every list the name happens to loosely resemble something on.</td></tr>
+  <tr><td class="sig">What's returned</td><td>The single highest-scoring candidate above an internal similarity threshold <b>from each list</b> — so a name that resembles entries on three lists returns up to three hits, one per list, strongest first. Not every candidate within a list.</td></tr>
  </table>
 
  <div class="gap">
   <b>What we do NOT check</b>
-  <p>UN Security Council Consolidated List, EU Consolidated List, UK OFSI —
-     none of these are loaded. "Not sanctioned" means not on OFAC SDN,
-     nothing broader. We also don't screen for Politically Exposed Persons
+  <p>Any list not shown in <code>listsChecked</code> or on
+     <a href="/lists">/lists</a>. "No match" means no match on the lists
+     named in the response — nothing broader. Other national lists (Canada,
+     Australia, Switzerland and others) are not included. We also don't screen for Politically Exposed Persons
      (PEP) status or adverse media (negative news) — both are separate,
      unbuilt products, not folded into this result.</p>
  </div>
 
- <div class="note">The list is a manual snapshot, not a live feed — it's
-    refreshed by hand, not on a schedule. If you need a same-day guarantee,
-    cross-check anything high-stakes against OFAC's own published list
-    directly. <a href="/lists">/lists</a> always shows the actual record
+ <div class="note">Each list is a snapshot, not a live feed. OFAC is
+    refreshed by hand; UN, EU and UK can refresh daily if automatic refresh is
+    enabled. If you need a same-day guarantee, cross-check anything
+    high-stakes against the issuing authority's own list. <a href="/lists">/lists</a> always shows the actual record
     count and last-refresh date, not a marketing claim.</div>
 
  <h2 id="address">Crypto wallet address screening</h2>

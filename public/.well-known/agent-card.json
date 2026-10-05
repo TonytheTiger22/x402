@@ -23,7 +23,7 @@
     {
       "id": "screen-name",
       "name": "Sanctions name screening",
-      "description": "Fuzzy name match against the OFAC Specially Designated Nationals (SDN) list.",
+      "description": "Fuzzy name match against the sanctions lists loaded (OFAC SDN, UN, EU, UK); each response lists exactly which were checked.",
       "method": "GET",
       "path": "/screen",
       "price": {

@@ -127,7 +127,24 @@ const SUBJECTS = {
   },
 };
 
-const LISTS_CHECKED = ["OFAC SDN"];
+const LIST_LABELS = { OFAC: "OFAC SDN", UN: "UN Consolidated", EU: "EU Consolidated", UK: "UK Sanctions List" };
+const NAME_SOURCES = Object.keys(LIST_LABELS);
+
+// Only lists that are actually loaded are reported as checked, so
+// `listsChecked` can never claim coverage the database doesn't have.
+let loadedCache = { at: 0, sources: ["OFAC"] };
+async function loadedSources() {
+  if (Date.now() - loadedCache.at < 60_000) return loadedCache.sources;
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.source FROM list_metadata m
+       WHERE m.source = ANY($1) AND EXISTS (SELECT 1 FROM entities e WHERE e.source = m.source)`,
+      [NAME_SOURCES]);
+    const have = new Set(rows.map((r) => r.source));
+    loadedCache = { at: Date.now(), sources: NAME_SOURCES.filter((x) => have.has(x)) };
+  } catch { loadedCache.at = Date.now() - 50_000; }   // keep last good value, retry soon
+  return loadedCache.sources;
+}
 const HIT_THRESHOLD = 0.4;
 
 const titleCase = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -139,8 +156,8 @@ function compareDob(subjectDob, listedDob) {
   if (/^\d{4}$/.test(listedDob)) {
     const subjectYear = String(subjectDob).slice(0, 4);
     return subjectYear === listedDob
-      ? { status: "partial", note: "year matches — OFAC record has year only" }
-      : { status: "differs", note: "year differs — OFAC record has year only" };
+      ? { status: "partial", note: "year matches — listed record has year only" }
+      : { status: "differs", note: "year differs — listed record has year only" };
   }
 
   const listedParsed = new Date(listedDob);
@@ -163,23 +180,28 @@ function compareField(subjectVal, listedVal) {
     : { status: "differs", note: "differs" };
 }
 
-async function bestMatch(name) {
+// Best match per loaded list, strongest first.
+async function matchesByList(name, sources) {
   const { rows } = await pool.query(
     `WITH candidates AS (
-       SELECT e.id, e.canonical_name AS name, e.entity_type, e.dob, e.nationality,
+       SELECT e.id, e.source, e.canonical_name AS name, e.entity_type, e.dob, e.nationality,
               e.program, e.uid, similarity(e.canonical_name, $1) AS score, 'primary name' AS basis
        FROM entities e
-       WHERE e.source = 'OFAC' AND e.canonical_name % $1
+       WHERE e.source = ANY($2) AND e.canonical_name % $1
        UNION ALL
-       SELECT e.id, e.canonical_name AS name, e.entity_type, e.dob, e.nationality,
+       SELECT e.id, e.source, e.canonical_name AS name, e.entity_type, e.dob, e.nationality,
               e.program, e.uid, similarity(a.alias_name, $1) AS score, 'alias match' AS basis
        FROM entity_aliases a JOIN entities e ON e.id = a.entity_id
-       WHERE e.source = 'OFAC' AND a.alias_name % $1
+       WHERE e.source = ANY($2) AND a.alias_name % $1
      )
-     SELECT * FROM candidates ORDER BY score DESC LIMIT 1`,
-    [name]
+     SELECT DISTINCT ON (source) * FROM candidates ORDER BY source, score DESC`,
+    [name, sources]
   );
-  return rows[0] || null;
+  return rows.sort((a, b) => b.score - a.score);
+}
+
+async function bestMatch(name, sources) {
+  return (await matchesByList(name, sources))[0] || null;
 }
 
 // Exact-match lookup for sanctioned crypto wallet addresses — a different
@@ -204,24 +226,31 @@ async function lookupAddress(rawAddress) {
 // Free, unauthenticated — just counts and refresh timestamps, nothing
 // that needs paying for. Powers the public "/lists" page on the site.
 app.get("/lists-meta", async (req, res) => {
-  const [{ rows: [nameCount] }, { rows: [addrCount] }, { rows: meta }] = await Promise.all([
-    pool.query("SELECT count(*)::int AS n FROM entities WHERE source = 'OFAC'"),
+  const [{ rows: counts }, { rows: [addrCount] }, { rows: meta }] = await Promise.all([
+    pool.query("SELECT source, count(*)::int AS n FROM entities WHERE source = ANY($1) GROUP BY source", [NAME_SOURCES]),
     pool.query("SELECT count(*)::int AS n FROM sanctioned_addresses WHERE source = 'OFAC-SDN-CRYPTO'"),
     pool.query("SELECT source, list_version, refreshed_at FROM list_metadata"),
   ]);
   const metaBySource = Object.fromEntries(meta.map((m) => [m.source, m]));
+  const countBySource = Object.fromEntries(counts.map((c) => [c.source, c.n]));
+  const LABELS = {
+    OFAC: "OFAC Specially Designated Nationals (SDN) list",
+    UN: "UN Security Council Consolidated List",
+    EU: "EU Consolidated Financial Sanctions List",
+    UK: "UK Sanctions List (FCDO)",
+  };
+
+  // A list appears here only once it has records loaded — never as a promise.
+  const nameLists = NAME_SOURCES.filter((x) => countBySource[x] > 0).map((x) => ({
+    source: x, label: LABELS[x], kind: "Names", matchType: "Fuzzy",
+    records: countBySource[x],
+    listVersion: metaBySource[x]?.list_version ?? null,
+    refreshedAt: metaBySource[x]?.refreshed_at ?? null,
+  }));
 
   res.json({
     lists: [
-      {
-        source: "OFAC",
-        label: "OFAC Specially Designated Nationals (SDN) list",
-        kind: "Names",
-        matchType: "Fuzzy",
-        records: nameCount.n,
-        listVersion: metaBySource.OFAC?.list_version ?? null,
-        refreshedAt: metaBySource.OFAC?.refreshed_at ?? null,
-      },
+      ...nameLists,
       {
         source: "OFAC-SDN-CRYPTO",
         label: "OFAC sanctioned digital-currency addresses",
@@ -280,7 +309,7 @@ app.get("/screen", async (req, res) => {
     const s = SUBJECTS[req.query.id] || SUBJECTS.clean;
     return res.json({
       subject: { name: s.name, dob: s.dob, country: s.country, type: s.type },
-      listsChecked: LISTS_CHECKED,
+      listsChecked: ["OFAC SDN"],
       screenedAt: new Date().toISOString(),
       hitCount: s.hits.length,
       hits: s.hits.map((h) => ({ list: h.list, score: h.score, name: h.listed.name })),
@@ -294,16 +323,17 @@ app.get("/screen", async (req, res) => {
     type: req.query.type || "Individual",
   };
 
-  const top = subject.name ? await bestMatch(subject.name) : null;
-  const score = top ? Math.round(top.score * 100) / 100 : 0;
-  const hitCount = top && score >= HIT_THRESHOLD ? 1 : 0;
+  const sources = await loadedSources();
+  const hits = (subject.name ? await matchesByList(subject.name, sources) : [])
+    .map((m) => ({ list: LIST_LABELS[m.source], score: Math.round(m.score * 100) / 100, name: m.name }))
+    .filter((h) => h.score >= HIT_THRESHOLD);
 
   res.json({
     subject,
-    listsChecked: LISTS_CHECKED,
+    listsChecked: sources.map((x) => LIST_LABELS[x]),
     screenedAt: new Date().toISOString(),
-    hitCount,
-    hits: hitCount ? [{ list: "OFAC SDN", score, name: top.name }] : [],
+    hitCount: hits.length,
+    hits,
   });
 });
 
@@ -335,7 +365,7 @@ app.get("/context", async (req, res) => {
     type: req.query.type || "Individual",
   };
 
-  const top = subject.name ? await bestMatch(subject.name) : null;
+  const top = subject.name ? await bestMatch(subject.name, await loadedSources()) : null;
   const score = top ? Math.round(top.score * 100) / 100 : 0;
   if (!top || score < HIT_THRESHOLD) return res.json({ error: "No alert to contextualise" });
 
@@ -361,10 +391,27 @@ app.get("/context", async (req, res) => {
         status: typeCmp.status, note: typeCmp.note },
     ],
     meta: {
-      list: "OFAC SDN", listVersion: "live", program: top.program,
+      list: LIST_LABELS[top.source], listVersion: "live", program: top.program,
       uid: top.uid, score, matchedOn: top.basis,
     },
   });
 });
+
+// Optional daily refresh of the UN/EU/UK lists, run inside this service (which
+// has the network access the ingest needs). Off unless AUTO_REFRESH_LISTS=1.
+if (process.env.AUTO_REFRESH_LISTS === "1") {
+  const { SOURCES, refreshSource } = await import("./sanctions-lists.js");
+  const refreshAll = async () => {
+    const client = await pool.connect();
+    try {
+      for (const src of Object.keys(SOURCES)) {
+        try { await refreshSource(client, src); loadedCache.at = 0; }
+        catch (e) { console.error("List refresh failed:", String(e.message || e)); }
+      }
+    } finally { client.release(); }
+  };
+  setTimeout(refreshAll, 60_000);
+  setInterval(refreshAll, 24 * 3600_000);
+}
 
 app.listen(4025, () => console.log("Compliance API on 4025 (live OFAC data, staged comparison)"));

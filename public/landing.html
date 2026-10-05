@@ -41,7 +41,7 @@
       "name": "Sanctions name screening",
       "price": "0.02",
       "priceCurrency": "USD",
-      "description": "Fuzzy name match against OFAC SDN sanctions data, paid per call over x402 on Base."
+      "description": "Fuzzy name match against OFAC, UN, EU and UK sanctions lists, paid per call over x402 on Base."
     },
     {
       "@type": "Offer",
@@ -401,7 +401,7 @@ $("go").onclick=async()=>{
   const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
 
   if(r.outcome==="clear"){
-   $("result").innerHTML='<div class="banner ok">No match found across 4 lists.</div>'
+   $("result").innerHTML='<div class="banner ok">No match found across '+r.screen.listsChecked.length+' list'+(r.screen.listsChecked.length===1?'':'s')+'.</div>'
     +'<div class="card">'
     +'<div class="kv"><span>Subject</span><b>'+esc(r.screen.subject.name)+'</b></div>'
     +'<div class="kv"><span>Lists checked</span><b>'+esc(r.screen.listsChecked.join(", "))+'</b></div>'

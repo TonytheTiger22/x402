@@ -7,8 +7,9 @@
 > around the assumption that most real callers are agents, not humans
 > clicking a button.
 
-PayPerScreen checks names against the OFAC Specially Designated Nationals
-(SDN) list (fuzzy match) and crypto wallet addresses against OFAC's
+PayPerScreen checks names against the OFAC SDN, UN Security Council, EU and UK
+sanctions lists (fuzzy match; the lists actually loaded are named in every
+response) and crypto wallet addresses against OFAC's
 sanctioned digital-currency address list (exact match). It also runs
 deterministic trust/risk composites — no LLM calls anywhere in the scoring
 path — against email addresses and IP addresses, each returning
@@ -45,7 +46,7 @@ call the API — only to send a query, not to pay for gas.
 
 ## Endpoints (see /docs for full detail)
 
-- `GET /screen` — $0.02 — fuzzy name match against OFAC SDN
+- `GET /screen` — $0.02 — fuzzy name match across the loaded sanctions lists (OFAC, UN, EU, UK)
 - `GET /context` — $0.05 — field-by-field comparison for a prior hit
 - `GET /screen-address` — $0.02 — exact match against OFAC's sanctioned
   crypto-address list

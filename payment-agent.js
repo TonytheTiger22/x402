@@ -105,7 +105,18 @@ app.get("/lists", async (_, res) => {
         <tbody>${rows}</tbody>
       </table>`;
 
-    res.send(template.replace("__LISTS_TABLE__", table));
+    const PLANNED = { OFAC: "OFAC Specially Designated Nationals (SDN) list",
+      UN: "UN Security Council Consolidated List", EU: "EU Consolidated Financial Sanctions List",
+      UK: "UK Sanctions List (FCDO)" };
+    const loaded = new Set(lists.filter((l) => l.records > 0).map((l) => l.source));
+    const missing = Object.entries(PLANNED).filter(([k]) => !loaded.has(k));
+    const notYet = missing.length
+      ? `<h2>Not yet included</h2>
+<p class="not-yet">Planned but not loaded today. Until they appear in the table above,
+   verify against these sources directly for anything high-stakes:</p>
+<ul class="not-yet">${missing.map(([, v]) => `<li>${v}</li>`).join("")}</ul>`
+      : "";
+    res.send(template.replace("__LISTS_TABLE__", table).replace("__NOT_YET__", notYet));
   } catch (err) {
     const fallback = `<p><strong>Live list data is temporarily unavailable</strong>
       (${String(err.message || err)}). Try again shortly, or see

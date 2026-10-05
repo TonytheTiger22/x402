@@ -133,7 +133,7 @@
    <li><span class="n">2</span><div><div class="t">Enter a name</div>
      <div class="d">The person or business you want to check before you work with them.</div></div></li>
    <li><span class="n">3</span><div><div class="t">Get your result</div>
-     <div class="d">An instant match or clear, checked against OFAC's sanctions list.</div></div></li>
+     <div class="d">An instant match or clear, checked against the sanctions lists we carry (see /lists).</div></div></li>
  </ul>
 
  <!-- STEP A: top-up form -->
@@ -194,7 +194,7 @@
  </div>
 
  <footer>
-   <p>Checked against OFAC's Specially Designated Nationals list. See exactly
+   <p>Checked against the sanctions lists we carry (OFAC, UN, EU, UK where loaded). See exactly
       what's covered on <a href="/lists">our lists page</a>.</p>
  </footer>
 </main>
@@ -268,7 +268,7 @@ document.getElementById('screen-form').addEventListener('submit', (e) => {
 
   const hit = SANCTIONED_DEMO_NAMES.some(n => name.toLowerCase().includes(n.split(' ')[1]));
   document.getElementById('screen-result').innerHTML = hit
-    ? `<div class="result hit"><h3>Possible match — review needed</h3><p>"${name}" may match a name on OFAC's sanctions list. Check the details before proceeding.</p></div>`
+    ? `<div class="result hit"><h3>Possible match — review needed</h3><p>"${name}" may match a name on a sanctions list. Check the details before proceeding.</p></div>`
     : `<div class="result clear"><h3>Clear — no match found</h3><p>"${name}" does not match any name on the lists checked.</p></div>`;
 });
 </script>

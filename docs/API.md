@@ -60,8 +60,9 @@ only sign, you never submit a transaction yourself.
 
 ### `GET /screen` — $0.02
 
-Fuzzy name match against the sanctions data we currently carry (see
-"What we check" below for the honest current coverage).
+Fuzzy name match against the sanctions lists we currently carry — OFAC SDN,
+UN, EU and UK where loaded (see "What we check" below; `listsChecked` in every
+response names exactly what was checked).
 
 **Query parameters**
 
@@ -84,9 +85,10 @@ Fuzzy name match against the sanctions data we currently carry (see
 }
 ```
 
-`hitCount` is `0` or `1` — this endpoint returns at most the single best
-match above an internal similarity threshold, not every candidate. If
-`hitCount` is `1`, call `/context` for the field-by-field comparison.
+`hits` has at most one entry **per list** — the best match on that list above an
+internal similarity threshold, strongest first. `hitCount` is the number of
+lists with a hit. If it is above `0`, call `/context` for the field-by-field
+comparison against the strongest match.
 
 ### `GET /context` — $0.05
 
@@ -218,15 +220,16 @@ supported yet. VPN/hosting classification and community abuse reports
 
 ## What we check (current, honest state)
 
-- **Name screening**: OFAC SDN only, right now. We are not yet checking
-  UN, EU, or UK OFSI lists — `listsChecked` in every response tells you
-  exactly what was actually checked, so don't assume broader coverage
-  than it states.
+- **Name screening**: OFAC SDN, UN Security Council Consolidated List, EU
+  Consolidated Financial Sanctions List and UK Sanctions List (FCDO). A list
+  counts only once it is loaded — `listsChecked` in every response, and
+  [/lists](https://payperscreen.com/lists), tell you exactly what was checked,
+  so don't assume broader coverage than they state.
 - **Crypto address screening**: OFAC's sanctioned digital-currency
   addresses only, sourced via a third-party extraction tool (see
   `ingest-crypto-addresses.mjs` in this repo for provenance). No linked
   identity data — a hit tells you the address is listed, not whose it is.
-- Both are snapshots, refreshed manually, not on a live schedule yet. If
+- All are snapshots. OFAC and crypto addresses are refreshed manually; UN/EU/UK can refresh daily. If
   you need a guarantee of same-day freshness, verify against OFAC's own
   published list directly for anything high-stakes.
 
