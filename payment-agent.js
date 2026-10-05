@@ -58,7 +58,7 @@ app.use((req, _res, next) => {
 });
 
 // Count real page views (no cookies, no raw IPs) — see analytics-store.js.
-app.use((req, _res, next) => { analytics.track(req); next(); });
+app.use((req, _res, next) => { if (!req.isAdmin) analytics.track(req); next(); });  // your own visits (signed in as admin) aren't counted
 
 app.use(express.static("public"));
 app.use("/examples", express.static("examples"));
