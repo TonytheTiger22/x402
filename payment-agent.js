@@ -8,6 +8,9 @@ import { readFileSync } from "fs";
 import * as audit from "./audit-store.js";
 import * as accounts from "./accounts-store.js";
 import * as analytics from "./analytics-store.js";
+import * as credits from "./credits-store.js";
+import { createPublicClient, http, verifyMessage } from "viem";
+import { base } from "viem/chains";
 
 const signer = privateKeyToAccount(process.env.BUYER_KEY);
 console.log("Buyer wallet address:", signer.address);
@@ -22,7 +25,7 @@ const LIST_VERSION = "OFAC-2026-08-17";
 const ledger = { spent: 0, lines: [] };
 // What the browser sees as "ledger": the site's running spend normally; in wallet mode
 // just the visitor's own call (so the site's spend isn't touched or shown).
-const ledgerFor = (req, line) => isWallet(req) ? { spent: line.price, lines: [line] } : ledger;
+const ledgerFor = (req, line) => (isWallet(req) || isBalance(req)) ? { spent: line.price, lines: [line] } : ledger;
 const txOf = (h) => (JSON.stringify(h ?? {}).match(/0x[0-9a-fA-F]{64}/) || [])[0] || null;
 
 // ---- Wallet mode -----------------------------------------------------------
@@ -32,6 +35,10 @@ const txOf = (h) => (JSON.stringify(h ?? {}).match(/0x[0-9a-fA-F]{64}/) || [])[0
 // forwarding the visitor's signed payment header and passing the API's 402
 // challenge / settlement headers back. The site wallet is never charged.
 const isWallet = (req) => String(req?.headers?.["x-pay-mode"] || "").toLowerCase() === "wallet";
+// Balance mode (X-Pay-Mode: balance): the visitor prepaid a USDC balance
+// (see credits-store.js). Each check is deducted from it first, then the
+// site wallet pays the API exactly as in the default mode — no popup.
+const isBalance = (req) => String(req?.headers?.["x-pay-mode"] || "").toLowerCase() === "balance";
 const PAY_HEADERS_IN = ["payment-signature", "x-payment"];
 const PAY_HEADERS_OUT = ["payment-required", "payment-response", "x-payment-response"];
 
@@ -40,6 +47,13 @@ class Passthrough extends Error {            // upstream said "not paid / not OK
 }
 // Sends a Passthrough to the browser, or returns false if `err` is something else.
 function relay(res, err) {
+  if (err instanceof credits.InsufficientBalance) {
+    res.json({ ok: false, code: err.code, error: "Not enough prepaid balance: this costs " +
+      Math.round(credits.toUsd(err.needed) * 100) + "¢ and your balance is $" + credits.toUsd(err.balance).toFixed(2) + ". Top up to continue.",
+      balanceUsd: credits.toUsd(err.balance) });
+    return true;
+  }
+  if (err?.code === "NO_CREDIT_SESSION") { res.status(401).json({ ok: false, code: err.code, error: err.message }); return true; }
   if (!(err instanceof Passthrough)) return false;
   for (const [k, v] of Object.entries(err.headers)) res.set(k, v);
   res.status(err.status).send(err.body);
@@ -67,11 +81,12 @@ async function walletBuy(req, path, params, label, price) {
   req.res.set("PAYMENT-RESPONSE", settleHeader);
   const line = { label, price, ms: Date.now() - t0, tx: txOf(settled ?? settleHeader), payer: "visitor wallet",
                  at: new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}) };
-  return { body: JSON.parse(text), line };
+  return { body: JSON.parse(text), line, settled };
 }
 
 async function buyQuery(path, params, label, price, req) {
   if (req && isWallet(req)) return walletBuy(req, path, params, label, price);
+  if (req && isBalance(req)) return balanceBuy(req, path, params, label, price);
   const t0 = Date.now();
   const qs = new URLSearchParams(params).toString();
   const r = await fetchWithPayment(`${API}${path}?${qs}`, { method: "GET" });
@@ -82,6 +97,23 @@ async function buyQuery(path, params, label, price, req) {
                  at: new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}) };
   ledger.lines.push(line);
   return { body: out.body, line };
+}
+
+// Deduct from the visitor's prepaid balance, then pay the API from the site
+// wallet. If anything after the deduction fails, the charge is refunded,
+// so a failed check never costs the visitor anything.
+async function balanceBuy(req, path, params, label, price) {
+  const address = req.creditAddress;
+  if (!address) { const e = new Error("Sign in with your wallet to use your prepaid balance."); e.code = "NO_CREDIT_SESSION"; throw e; }
+  const chargeId = credits.charge(address, credits.toMicros(price), label);
+  try {
+    const out = await buyQuery(path, params, label, price);   // site-wallet path
+    out.line = { ...out.line, payer: "prepaid balance" };
+    return out;
+  } catch (err) {
+    credits.refund(chargeId);
+    throw err;
+  }
 }
 
 const app = express();
@@ -103,6 +135,7 @@ app.use((req, _res, next) => {
   req.cookies = parseCookies(req.headers.cookie);
   req.account = accounts.accountForSession(req.cookies.session);
   req.isAdmin = accounts.isAdminSession(req.cookies.admin_session);
+  req.creditAddress = credits.addressForSession(req.cookies.credit_session);
   next();
 });
 
@@ -308,6 +341,87 @@ app.post("/api/admin/test-case", (req, res) => {
   res.json({ ok: true, record: audit.get(rec.reference), account });
 });
 
+// --- Prepaid balance ("load your wallet") ---------------------------------
+// Balances live in the same sqlite file as accounts. On Railway that file is
+// wiped on every redeploy unless DB_PATH points at a persistent volume — so
+// top-ups are refused there until it does, rather than losing people's money.
+const BALANCES_PERSISTENT = !process.env.RAILWAY_ENVIRONMENT || !!process.env.DB_PATH;
+if (!BALANCES_PERSISTENT) console.warn("Prepaid top-ups are disabled: set DB_PATH to a file on a persistent Railway volume (e.g. /data/audit.db).");
+
+// Verifies plain-EOA signatures locally, and smart-contract wallets
+// (ERC-1271 / ERC-6492, e.g. Coinbase Smart Wallet) via a Base RPC call.
+const basePublic = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL) });
+async function signatureValid(address, message, signature) {
+  try { if (await verifyMessage({ address, message, signature })) return true; } catch {}
+  try { return await basePublic.verifyMessage({ address, message, signature }); } catch { return false; }
+}
+
+const creditCookie = (req, token, maxAge) =>
+  `credit_session=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Lax${req.secure ? "; Secure" : ""}`;
+
+app.get("/api/credits", async (req, res) => {
+  let limits = { min: 1.25, max: 250 };
+  try { const r = await fetch(`${API}/topup-limits`); if (r.ok) limits = await r.json(); } catch {}
+  const address = req.creditAddress;
+  res.json({
+    ok: true, signedIn: !!address, address, topupsEnabled: BALANCES_PERSISTENT, limits,
+    balanceUsd: address ? credits.toUsd(credits.balanceMicros(address)) : 0,
+    history: address ? credits.history(address).map((h) => ({ ...h, delta: credits.toUsd(h.delta) })) : [],
+  });
+});
+
+app.get("/api/credits/nonce", (req, res) => res.json({ ok: true, ...credits.newSignInMessage(req.get("host")) }));
+
+app.post("/api/credits/login", async (req, res) => {
+  const { address, message, signature } = req.body || {};
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address || "") || typeof message !== "string" || typeof signature !== "string")
+    return res.json({ ok: false, error: "Missing address, message or signature" });
+  const nonce = (message.match(/Nonce: ([0-9a-f]{32})/) || [])[1];
+  const host = req.get("host");
+  if (!nonce || !message.startsWith(`Sign in to ${host} `) || !credits.consumeNonce(nonce))
+    return res.json({ ok: false, error: "This sign-in request has expired. Try again." });
+  if (!(await signatureValid(address, message, signature)))
+    return res.json({ ok: false, error: "The signature didn't match that wallet." });
+  const { token, maxAgeSec } = credits.createSession(address);
+  res.setHeader("Set-Cookie", creditCookie(req, token, maxAgeSec));
+  res.json({ ok: true, address: address.toLowerCase(), balanceUsd: credits.toUsd(credits.balanceMicros(address)) });
+});
+
+app.post("/api/credits/logout", (req, res) => {
+  credits.destroySession(req.cookies.credit_session);
+  res.setHeader("Set-Cookie", creditCookie(req, "", 0));
+  res.json({ ok: true });
+});
+
+// Top-up: the visitor's wallet signs one x402 payment for the chosen amount
+// (relayed to the API's GET /topup, which sets the price), and the settled
+// amount is credited to the wallet that paid. Idempotent per settlement tx.
+app.post("/api/topup", async (req, res) => {
+  if (!isWallet(req)) return res.status(400).json({ ok: false, error: "Top-ups are paid from your wallet" });
+  if (!BALANCES_PERSISTENT) return res.json({ ok: false, error: "Top-ups are temporarily unavailable." });
+  if (!req.creditAddress) return res.status(401).json({ ok: false, code: "NO_CREDIT_SESSION", error: "Sign in with your wallet first." });
+  const amount = Math.round(Number(req.body?.amount) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) return res.json({ ok: false, error: "Choose an amount" });
+  try {
+    const paid = await walletBuy(req, "/topup", { amount: amount.toFixed(2) }, "Balance top-up", amount);
+    const credited = Number(paid.body?.credited);
+    const payer = String(paid.settled?.payer || req.creditAddress).toLowerCase();
+    const tx = paid.line.tx || paid.settled?.transaction;
+    if (!(credited > 0) || !tx) throw new Error("Top-up settled without an amount or transaction");
+    credits.creditTopup(payer, credits.toMicros(credited), tx);
+    res.json({
+      ok: true, credited, tx, creditedTo: payer,
+      note: payer !== req.creditAddress ? "Credited to the wallet that paid, which isn't the one you're signed in with." : undefined,
+      balanceUsd: credits.toUsd(credits.balanceMicros(req.creditAddress)),
+      ledger: ledgerFor(req, paid.line),
+    });
+  } catch (err) {
+    if (relay(res, err)) return;
+    console.error("Top-up failed:", err);
+    res.json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 app.get("/api/ledger", (_, res) => res.json(ledger));
 app.get("/api/audit", (_, res) => res.json(audit.list(200)));
 app.get("/api/verify/:ref", (req, res) => res.json(audit.verify(req.params.ref)));
@@ -357,9 +471,9 @@ app.post("/api/screen-free", async (req, res) => {
                         record: audit.get(rec.reference), ledger: ledgerFor(req, screen.line) });
     }
 
-    // Wallet mode: the field comparison is a second, separate payment the visitor
-    // signs on their own (POST /api/wallet-context), so stop here.
-    if (isWallet(req)) {
+    // Wallet/balance mode: the field comparison is a second, separate 5¢ charge
+    // the visitor asks for themselves (POST /api/wallet-context), so stop here.
+    if (isWallet(req) || isBalance(req)) {
       return res.json({ ok: true, outcome: "hit", screen: b, context: null,
                         record: audit.get(rec.reference), ledger: ledgerFor(req, screen.line) });
     }
@@ -377,7 +491,7 @@ app.post("/api/screen-free", async (req, res) => {
 
 // Wallet mode only: the 5¢ field comparison for a hit, paid by the visitor's wallet.
 app.post("/api/wallet-context", async (req, res) => {
-  if (!isWallet(req)) return res.status(400).json({ ok: false, error: "Wallet mode only" });
+  if (!isWallet(req) && !isBalance(req)) return res.status(400).json({ ok: false, error: "Wallet or balance mode only" });
   const name = (req.body.name || "").trim();
   if (!name) return res.json({ ok: false, error: "Name is required" });
   try {

@@ -22,6 +22,19 @@ const pool = new pg.Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+// Top-up amounts in USDC. The minimum (default 1.25 USDC) is set to cover
+// about €1 with room for exchange-rate moves; override with TOPUP_MIN_USD.
+// The price and the credited amount both come from this one function, so
+// what the payer authorises is exactly what gets credited.
+const TOPUP_MIN = Number(process.env.TOPUP_MIN_USD || 1.25);
+const TOPUP_MAX = 250;
+function topupAmount(raw) {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  const n = Math.round(Number(v) * 100) / 100;
+  if (!Number.isFinite(n) || n < TOPUP_MIN) return TOPUP_MIN;
+  return Math.min(n, TOPUP_MAX);
+}
+
 const priced = (price, description, extras = {}) => ({
   accepts: [{ scheme: "exact", price, network: NETWORK, payTo: SELLER }],
   description, mimeType: "application/json",
@@ -105,11 +118,25 @@ app.use(paymentMiddleware(
         },
       }),
     }),
+    // Prepaid balance top-up. Not listed in Bazaar discovery: paying it is
+    // only meaningful through payperscreen.com, which credits the payer's
+    // balance after settlement (see /api/topup in payment-agent.js).
+    "GET /topup": {
+      accepts: [{ scheme: "exact", network: NETWORK, payTo: SELLER,
+                  price: (ctx) => "$" + topupAmount(ctx.adapter.getQueryParam?.("amount")
+                                        ?? ctx.adapter.getQueryParams?.()?.amount).toFixed(2) }],
+      description: "Prepaid balance top-up (payperscreen.com)", mimeType: "application/json",
+    },
   },
   new x402ResourceServer(facilitator)
     .register(NETWORK, new ExactEvmScheme())
     .registerExtension(bazaarResourceServerExtension),
 ));
+
+app.get("/topup", (req, res) => {
+  res.json({ ok: true, credited: topupAmount(req.query.amount), currency: "USDC" });
+});
+app.get("/topup-limits", (_, res) => res.json({ min: TOPUP_MIN, max: TOPUP_MAX }));
 
 const SUBJECTS = {
   clean: { name: "Maria Santos Oliveira", dob: "1981-04-12",
