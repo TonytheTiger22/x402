@@ -458,6 +458,14 @@ function comparisonTable(fields){
  return '<table><tr><th>Field</th><th>You entered</th><th>Listed party</th><th></th></tr>'+rows+'</table>';
 }
 
+// On-chain receipt row: the settlement transaction on Base, when we have its hash.
+function txRow(r, label){
+ const tx=(r.ledger&&r.ledger.lines&&r.ledger.lines.slice(-1)[0]||{}).tx || (r.record&&r.record.payment_tx) || null;
+ if(!tx) return '';
+ return '<div class="kv"><span>'+(label||'Payment')+'</span><b><a href="https://basescan.org/tx/'+esc(tx)+'" target="_blank" rel="noopener">'
+  +esc(tx.slice(0,10))+'…'+esc(tx.slice(-6))+' &#8599;</a></b></div>';
+}
+
 function contextHtml(c){
  return comparisonTable(c.fields)
   +'<div class="meta">'+esc(c.meta.list)+' '+esc(c.meta.listVersion)+' &middot; '
@@ -486,7 +494,7 @@ $("go").onclick=async()=>{
     +'<div class="card">'
     +'<div class="kv"><span>Subject</span><b>'+esc(r.screen.subject.name)+'</b></div>'
     +'<div class="kv"><span>Lists checked</span><b>'+esc(r.screen.listsChecked.join(", "))+'</b></div>'
-    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'+txRow(r)
     +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
     +'<div class="meta">Recorded with a hash of the check facts, so this result cannot be '
     +'backdated or altered after the fact. Try the sanctioned-name example above to see a match.</div>'
@@ -499,7 +507,7 @@ $("go").onclick=async()=>{
        +'<div class="price">A second payment, signed in your wallet. Compares what you entered against the listed party.</div>'
        +'<div id="ctx-err" class="err"></div>')+'</div>'
     +'<div class="card">'
-    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'+txRow(r)
     +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
     +'<div class="meta">This is a match result and a field comparison only. What you do with it '
     +'&mdash; clear, escalate, hold a payment &mdash; is entirely your own process.</div></div>';
@@ -510,7 +518,7 @@ $("go").onclick=async()=>{
      const c=await post("/api/wallet-context",{name, country:$("country").value.trim(),
                                                dob:$("dob").value, type:$("type").value}, 0.05);
      if(!c.ok) throw new Error(c.error||"Couldn't get the comparison.");
-     $("ctx-slot").innerHTML=contextHtml(c.context);
+     $("ctx-slot").innerHTML=contextHtml(c.context)+'<div class="card">'+txRow(c,"Payment (comparison)")+'</div>';
     }catch(e){ $("ctx-err").textContent=String(e.message||e); gc.disabled=false; gc.innerHTML="Get the field comparison &mdash; 5&cent; from your wallet"; }
    };
   }
@@ -541,7 +549,7 @@ $("go-address").onclick=async()=>{
    $("result").innerHTML='<div class="banner ok">Not on OFAC’s sanctioned address list.</div>'
     +'<div class="card">'
     +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+esc(b.address)+'</b></div>'
-    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'+txRow(r)
     +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
     +'<div class="meta">'+esc(b.note)+' Try the sanctioned-address example above to see a hit.</div>'
     +'</div>';
@@ -550,7 +558,7 @@ $("go-address").onclick=async()=>{
      +'digital-currency address list ('+esc(b.matches.map(m=>m.asset).join(", "))+')</div>'
     +'<div class="card">'
     +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+esc(b.address)+'</b></div>'
-    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
+    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'+txRow(r)
     +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
     +'<div class="meta">'+esc(b.note)+'</div></div>';
   }
@@ -603,7 +611,7 @@ $("go-email").onclick=async()=>{
    +'<div class="card">'+signalsTable(b.signals)
    +'<div class="meta">'+esc(b.note)+'</div></div>'
    +'<div class="card">'
-   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
+   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'+txRow(r)
    +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
   $("err-email").textContent=(e.message||String(e));
@@ -632,7 +640,7 @@ $("go-ip").onclick=async()=>{
    +'<div class="card">'+signalsTable(b.signals)
    +'<div class="meta">'+esc(b.note)+'</div></div>'
    +'<div class="card">'
-   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
+   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'+txRow(r)
    +'<div class="kv"><span>Cost</span><b>1&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
   $("err-ip").textContent=(e.message||String(e));
