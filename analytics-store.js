@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS idx_visits_day ON visits(day);
 const SALT = process.env.ANALYTICS_SALT || process.env.ADMIN_CODE || "payperscreen";
 const BOT_RE = /bot|crawl|spider|slurp|curl|wget|python|node-fetch|axios|go-http|headless|preview|monitor|uptime|facebookexternalhit/i;
 // Only real pages — not assets, APIs, or machine-readable files.
-const PAGES = new Set(["/", "/landing", "/docs", "/lists", "/methodology", "/login", "/cases", "/audit", "/review"]);
+const PAGES = new Set(["/", "/landing", "/docs", "/lists", "/methodology", "/login", "/cases", "/audit"]);
 
 const insert = db.prepare("INSERT INTO visits (ts, day, path, referrer, visitor) VALUES (?,?,?,?,?)");
 

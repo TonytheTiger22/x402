@@ -7,7 +7,6 @@
     ["/methodology", "Methodology"],
     ["/lists", "Lists we check"],
     ["/docs", "API docs"],
-    ["/review", "Review workflow"],
   ];
   var path = location.pathname.replace(/\/+$/, "") || "/";
   if (path === "/landing") path = "/";

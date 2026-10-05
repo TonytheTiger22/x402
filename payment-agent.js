@@ -19,13 +19,6 @@ const httpClient = new x402HTTPClient(client);
 const API = process.env.COMPLIANCE_API_URL || "http://localhost:4025";
 const LIST_VERSION = "OFAC-2026-08-17";
 
-const PAYMENTS = {
-  clean: { ref: "INV-88213", vendor: "Maria Santos Oliveira",
-           amount: "$1,250.00", purpose: "Design retainer, August" },
-  hit:   { ref: "INV-88214", vendor: "Viktor Petrov",
-           amount: "$1,250.00", purpose: "Logistics consulting, August" },
-};
-
 const ledger = { spent: 0, lines: [] };
 const txOf = (h) => (JSON.stringify(h ?? {}).match(/0x[0-9a-fA-F]{64}/) || [])[0] || null;
 
@@ -41,8 +34,6 @@ async function buyQuery(path, params, label, price) {
   ledger.lines.push(line);
   return { body: out.body, line };
 }
-
-const buy = (path, id, label, price) => buyQuery(path, { id }, label, price);
 
 const app = express();
 app.set("trust proxy", 1); // Railway terminates TLS in front of us; needed so req.secure is right
@@ -77,7 +68,6 @@ app.get("/.well-known/agent-card.json", (_, res) =>
   res.sendFile(process.cwd() + "/public/.well-known/agent-card.json", { dotfiles: "allow" }));
 app.get("/", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
 app.get("/audit", (_, res) => res.sendFile(process.cwd() + "/public/audit.html"));
-app.get("/review", (_, res) => res.sendFile(process.cwd() + "/public/compliance.html"));
 app.get("/methodology", (_, res) => res.sendFile(process.cwd() + "/public/methodology.html"));
 // Old path kept working in case anything still links to it.
 app.get("/landing", (_, res) => res.sendFile(process.cwd() + "/public/landing.html"));
@@ -277,39 +267,6 @@ app.get("/api/export", (_, res) => {
 
 app.post("/api/reset", (_, res) => { ledger.spent = 0; ledger.lines = []; res.json(ledger); });
 
-app.post("/api/run", async (req, res) => {
-  const id = req.body.id === "hit" ? "hit" : "clean";
-  try {
-    const screen = await buy("/screen", id, "Sanctions screening", 0.02);
-    const b = screen.body;
-
-    const rec = audit.record({
-      subject: b.subject,
-      listsChecked: b.listsChecked,
-      listVersion: LIST_VERSION,
-      hitCount: b.hitCount,
-      topScore: b.hitCount ? b.hits[0].score : null,
-      topMatch: b.hitCount ? b.hits[0].name : null,
-      clientRef: PAYMENTS[id].ref,
-      pricePaid: 0.02,
-      paymentTx: screen.line.tx,
-    });
-
-    if (b.hitCount === 0) {
-      audit.dispose(rec.reference, "no_match_auto", "system");
-      return res.json({ ok: true, id, payment: PAYMENTS[id], outcome: "clear",
-                        screen: b, record: audit.get(rec.reference), ledger });
-    }
-
-    const context = await buy("/context", id, "Alert context pack", 0.05);
-    res.json({ ok: true, id, payment: PAYMENTS[id], outcome: "review",
-               screen: b, context: context.body, record: rec, ledger });
-
-  } catch (err) {
-    res.json({ ok: false, error: String(err), ledger });
-  }
-});
-
 app.post("/api/screen-free", async (req, res) => {
   const name = (req.body.name || "").trim();
   const dob = req.body.dob || "";
@@ -484,7 +441,7 @@ app.post("/api/dispose", (req, res) => {
 
   // Checks run from a signed-in account's own queue can only be actioned by
   // that account, unless an admin is acting. Checks with no owner (the
-  // scripted /review demo) keep the old open behavior so that flow doesn't
+  // scripted demo) keep the old open behavior so that flow doesn't
   // need a login.
   if (existing.account_id && !req.isAdmin && (!req.account || req.account.id !== existing.account_id)) {
     return res.status(403).json({ ok: false, error: "Not signed in to the account that owns this check" });
