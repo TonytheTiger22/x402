@@ -14,20 +14,25 @@ const BASE_HEX = "0x" + base.id.toString(16); // 0x2105
 
 let provider = null, address = null;
 
-// Pick the injected wallet. EIP-6963 announcements first (handles several wallets
-// installed at once), then the classic window.ethereum.
-function findProvider() {
+// Wallet discovery (EIP-6963): every installed wallet announces itself with a name
+// and icon, so MetaMask, Coinbase Wallet, Rabby etc. can coexist and be chosen.
+// Falls back to the classic window.ethereum for wallets that don't announce.
+const announced = new Map();
+window.addEventListener("eip6963:announceProvider", (e) => {
+  const d = e.detail; if (d?.provider) announced.set(d.info?.uuid || d.info?.rdns || d.info?.name, d);
+});
+function listWallets() {
   return new Promise((resolve) => {
-    const found = [];
-    const onAnnounce = (e) => found.push(e.detail);
-    window.addEventListener("eip6963:announceProvider", onAnnounce);
     window.dispatchEvent(new Event("eip6963:requestProvider"));
     setTimeout(() => {
-      window.removeEventListener("eip6963:announceProvider", onAnnounce);
-      const eth = window.ethereum;
-      const pick = found.find((f) => /metamask|coinbase/i.test(f.info?.name || "")) || found[0];
-      resolve(eth ?? pick?.provider ?? null);
-    }, 250);
+      let list = [...announced.values()].map((d) => ({ id: d.info?.rdns || d.info?.name, name: d.info?.name || "Wallet", icon: d.info?.icon || "", provider: d.provider }));
+      if (!list.length && window.ethereum) {
+        const e = window.ethereum;
+        list = [{ id: "injected", icon: "", provider: e,
+          name: e.isMetaMask ? "MetaMask" : e.isCoinbaseWallet ? "Coinbase Wallet" : "Browser wallet" }];
+      }
+      resolve(list);
+    }, 300);
   });
 }
 
@@ -45,15 +50,18 @@ async function ensureBase() {
   }
 }
 
-async function connect() {
-  provider = provider || (await findProvider());
-  if (!provider) throw new Error("NO_WALLET");
+async function connect(id) {
+  const wallets = await listWallets();
+  const w = (id && wallets.find((x) => x.id === id)) || wallets[0];
+  if (!w) throw new Error("NO_WALLET");
+  provider = w.provider;
   const accounts = await provider.request({ method: "eth_requestAccounts" });
   address = accounts?.[0];
   if (!address) throw new Error("No account was shared by the wallet");
   await ensureBase();
-  return address;
+  return { address, name: w.name };
 }
+function disconnect() { provider = null; address = null; }
 
 async function usdcBalance() {
   const pc = createPublicClient({ chain: base, transport: custom(provider) });
@@ -75,8 +83,7 @@ function payFetch() {
 }
 
 window.PPSWallet = {
-  hasWallet: async () => { provider = provider || (await findProvider()); return !!provider; },
-  connect, usdcBalance, payFetch,
+  listWallets, connect, disconnect, usdcBalance, payFetch,
   get address() { return address; },
   onChange(cb) {
     provider?.on?.("accountsChanged", (a) => { address = a?.[0] || null; cb(); });

@@ -158,6 +158,20 @@
  .pm{font:600 13px var(--sans);padding:6px 12px;border:1px solid var(--rule);background:var(--paper);color:var(--dim);cursor:pointer;border-radius:0}
  .pm.active{border-color:var(--ink);color:var(--ink)}
  #wallet-status{font-weight:400}
+ #wallet-status button{font:inherit;color:var(--link);background:none;border:0;cursor:pointer;padding:0 0 0 6px;text-decoration:underline}
+ .wm-back{position:fixed;inset:0;background:rgba(26,26,24,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+ .wm{background:var(--paper);border:1px solid var(--ink);max-width:380px;width:100%;padding:22px 22px 18px}
+ .wm h3{font:700 20px var(--serif);margin:0 0 4px}
+ .wm p{font:400 13.5px/1.5 var(--sans);color:var(--dim);margin:0 0 14px}
+ .wm .w{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font:600 15px var(--sans);padding:11px 12px;margin-top:8px;
+        border:1px solid var(--rule);background:var(--paper);color:var(--ink);cursor:pointer;border-radius:0;text-decoration:none}
+ .wm .w:hover{border-color:var(--ink)}
+ .wm .w img,.wm .w .ph{width:28px;height:28px;border-radius:6px;flex:none}
+ .wm .w .ph{background:var(--rule)}
+ .wm .w small{margin-left:auto;font:500 12px var(--sans);color:var(--dim)}
+ .wm .sec{font:600 12px var(--sans);color:var(--dim);margin:16px 0 0;letter-spacing:.02em}
+ .wm .close{display:block;margin:16px auto 0;font:500 13px var(--sans);color:var(--dim);background:none;border:0;cursor:pointer}
+ .wm .e{color:var(--warn);font:500 13px var(--sans);margin-top:10px}
  .go{display:block;width:100%;background:var(--ink);color:var(--paper);border:0;
      border-radius:0;padding:14px 18px;font:600 15.5px var(--sans);margin-top:22px}
  .go:hover{background:#000}
@@ -343,6 +357,14 @@
       back once real email delivery is in. -->
 </div>
 
+<div class="wm-back" id="wm-back"><div class="wm" role="dialog" aria-modal="true" aria-labelledby="wm-title">
+ <h3 id="wm-title">Connect a wallet</h3>
+ <p>Pay per check in USDC on Base. You sign a gasless payment &mdash; we never see your keys, and you need no ETH.</p>
+ <div id="wm-list"></div>
+ <div class="e" id="wm-err"></div>
+ <button class="close" id="wm-close">Cancel</button>
+</div></div>
+
 <script>
 const $=(i)=>document.getElementById(i);
 const ESC_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
@@ -400,22 +422,48 @@ function setMode(m){
 async function refreshWalletStatus(){
  const w=window.PPSWallet; if(!w||!w.address){ $("wallet-status").textContent=""; return; }
  let bal=""; try{ bal=" · "+(await w.usdcBalance()).toFixed(2)+" USDC"; }catch{}
- $("wallet-status").textContent="Connected "+short(w.address)+bal+" · Base";
+ $("wallet-status").innerHTML=esc("Connected "+short(w.address)+bal+" · Base")+'<button id="wm-change">Change</button>';
+ $("wm-change").onclick=()=>{ window.PPSWallet.disconnect(); setMode("site"); openWalletModal(); };
 }
-async function useWallet(){
- $("wallet-status").textContent="Connecting…";
- try{
-  await loadWalletLib();
-  if(!(await window.PPSWallet.hasWallet())) throw new Error("NO_WALLET");
-  await window.PPSWallet.connect();
-  window.PPSWallet.onChange(refreshWalletStatus);
-  setMode("wallet"); await refreshWalletStatus();
- }catch(e){
-  setMode("site");
-  $("wallet-status").textContent = e.message==="NO_WALLET"
-   ? "No browser wallet found. Install MetaMask or Coinbase Wallet (or open this page inside your wallet app), then try again."
-   : /reject|denied|4001/i.test(e.message||"") ? "Connection cancelled." : "Couldn't connect: "+(e.message||e);
+const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function closeModal(){ $("wm-back").style.display="none"; }
+async function openWalletModal(){
+ $("wm-err").textContent=""; $("wm-list").innerHTML='<p>Looking for wallets…</p>'; $("wm-back").style.display="flex";
+ try{ await loadWalletLib(); }catch(e){ $("wm-list").innerHTML=""; $("wm-err").textContent=e.message; return; }
+ const found=await window.PPSWallet.listWallets();
+ const here=encodeURIComponent(location.href), bare=location.host+location.pathname;
+ let html="";
+ if(found.length){
+  html+=found.map((w,i)=>'<button class="w" data-i="'+i+'">'+(w.icon?'<img alt="" src="'+esc(w.icon)+'">':'<span class="ph"></span>')
+        +esc(w.name)+'<small>detected</small></button>').join("");
  }
+ const names=found.map(w=>w.name.toLowerCase()).join("|");
+ const more=[];
+ if(!/metamask/.test(names)) more.push(["MetaMask", isMobile?"https://metamask.app.link/dapp/"+bare:"https://metamask.io/download/", isMobile?"open app":"install"]);
+ if(!/coinbase/.test(names)) more.push(["Coinbase Wallet", isMobile?"https://go.cb-w.com/dapp?cb_url="+here:"https://www.coinbase.com/wallet/downloads", isMobile?"open app":"install"]);
+ if(more.length){
+  html+='<div class="sec">'+(found.length?"Other wallets":(isMobile?"Open this page in your wallet app":"No wallet found in this browser — get one"))+'</div>'
+   +more.map(m=>'<a class="w" target="_blank" rel="noopener" href="'+esc(m[1])+'"><span class="ph"></span>'+esc(m[0])+'<small>'+m[2]+'</small></a>').join("");
+ }
+ $("wm-list").innerHTML=html;
+ $("wm-list").querySelectorAll("button.w").forEach(btn=>btn.onclick=()=>pickWallet(found[+btn.dataset.i]));
+}
+async function pickWallet(w){
+ $("wm-err").textContent=""; $("wm-list").querySelectorAll("button.w").forEach(b=>b.disabled=true);
+ try{
+  await window.PPSWallet.connect(w.id);
+  window.PPSWallet.onChange(refreshWalletStatus);
+  closeModal(); setMode("wallet"); await refreshWalletStatus();
+ }catch(e){
+  $("wm-list").querySelectorAll("button.w").forEach(b=>b.disabled=false);
+  $("wm-err").textContent=/reject|denied|4001/i.test(e.message||"")?"Connection cancelled in the wallet.":"Couldn't connect: "+(e.message||e);
+ }
+}
+$("wm-close").onclick=closeModal;
+$("wm-back").onclick=(e)=>{ if(e.target.id==="wm-back") closeModal(); };
+function useWallet(){
+ if(window.PPSWallet&&window.PPSWallet.address){ setMode("wallet"); refreshWalletStatus(); } // already connected
+ else openWalletModal();
 }
 $("pm-site").onclick=()=>setMode("site");
 $("pm-wallet").onclick=useWallet;
