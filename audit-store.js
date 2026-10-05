@@ -31,12 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_perf ON checks(performed_at);
 try { db.exec("ALTER TABLE checks ADD COLUMN account_id TEXT"); } catch {}
 db.exec("CREATE INDEX IF NOT EXISTS idx_account_open ON checks(account_id, disposition)");
 
-// Tier-3 "AI agent opinion" columns — an optional annotation attached to an
-// existing check, never a replacement for it. Migration-safe for the same
-// reason as account_id above.
-try { db.exec("ALTER TABLE checks ADD COLUMN ai_recommendation TEXT"); } catch {}
-try { db.exec("ALTER TABLE checks ADD COLUMN ai_opinion TEXT"); } catch {}
-
 // Canonical serialisation: stable key order, no floats left to chance.
 // Same shape a future on-chain commitment would hash.
 export function canonical(o) {
@@ -89,16 +83,6 @@ export function record(input) {
      @disposition, @disposed_at, @disposed_by, @price_paid, @payment_tx, @record_hash)`).run(row);
 
   return row;
-}
-
-// Attaches a tier-3 AI opinion to an already-recorded check. Stored
-// separately from record_hash's inputs on purpose — an opinion is
-// after-the-fact commentary, not part of what was actually screened, so it
-// never changes the integrity hash of the original record.
-export function attachOpinion(reference, opinion) {
-  db.prepare(`UPDATE checks SET ai_recommendation=?, ai_opinion=? WHERE reference=?`)
-    .run(opinion.recommendation, JSON.stringify(opinion), reference);
-  return get(reference);
 }
 
 export function dispose(reference, disposition, by) {

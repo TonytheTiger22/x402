@@ -77,15 +77,8 @@
       "price": "0.01",
       "priceCurrency": "USD",
       "description": "Known-high-risk-IP check against the Spamhaus ZEN blocklist and the Tor exit-node list."
-    },
-    {
-      "@type": "Offer",
-      "name": "AI agent opinion (add-on, any check)",
-      "price": "0.05",
-      "priceCurrency": "USD",
-      "description": "Optional add-on priced on top of any check above: an LLM reads the already-computed signals and returns a plain-English clear/review/escalate recommendation with reasoning."
     }
-  ],
+    ],
   "termsOfService": "https://payperscreen.com/docs"
 }
 </script>
@@ -211,8 +204,8 @@
  <p class="kicker">A data service, not a compliance service</p>
  <h1 class="nameplate">PayPerScreen</h1>
  <p class="dateline">Sanctions and risk screening, priced per check and settled
-    live on Base mainnet. Raw data, your own case queue, or an AI opinion
-    on top — pick what you need.</p>
+    live on Base mainnet. Raw data, or your own case queue
+    for the flags — pick what you need.</p>
 </header>
 
 <main class="layout">
@@ -236,7 +229,6 @@
   <div class="tiers">
    <div class="tier"><b>1. Raw data</b><span>Every check below, straight as JSON — the deterministic signals and nothing else. See exactly what we check at <a href="/methodology">/methodology</a>.</span></div>
    <div class="tier"><b>2. Do it yourself</b><span>Sign in and flags land in your own case queue to clear or escalate at <a href="/login">/login</a>.</span></div>
-   <div class="tier"><b>3. AI agent opinion</b><span>Add a plain-English recommendation on top of any result, after you've seen the data.</span></div>
   </div>
 
   <p class="fine-print">Methodology, QA, and every source we check are
@@ -414,53 +406,6 @@ function comparisonTable(fields){
  return '<table><tr><th>Field</th><th>You entered</th><th>Listed party</th><th></th></tr>'+rows+'</table>';
 }
 
-// --- Tier 3: AI agent opinion. Appended under any tier-1 result, for any
-// of the 5 check types, so it reads "here's the data, here's your queue,
-// here's a second opinion if you want it" rather than three disconnected
-// products. ---
-const OPINION_COST={name:"7¢",address:"7¢",website:"7¢",email:"7¢",ip:"6¢"};
-const OPINION_REC_BANNER={clear:"ok",review:"partial",escalate:"bad"};
-const OPINION_REC_LABEL={clear:"Clear",review:"Worth a look",escalate:"Escalate"};
-let opinionSeq=0;
-
-function opinionBlock(type, reference, getParams){
- const seq=++opinionSeq;
- const btnId="ai-opinion-btn-"+seq, holderId="ai-opinion-result-"+seq;
- setTimeout(()=>{
-  const btn=document.getElementById(btnId);
-  if(!btn) return;
-  btn.onclick=async()=>{
-   const holder=document.getElementById(holderId);
-   btn.disabled=true; btn.textContent="Asking the AI… paying as it goes.";
-   holder.innerHTML="";
-   try{
-    const res=await fetch("/api/opinion",{method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({type, reference, ...getParams()})});
-    const r=await res.json();
-    if(!r.ok){ holder.innerHTML='<p class="err" style="margin-top:12px">'+esc(r.error||"Could not get an AI opinion.")+'</p>'; return; }
-    const o=r.opinion;
-    const banner=OPINION_REC_BANNER[o.recommendation]||"partial";
-    const label=OPINION_REC_LABEL[o.recommendation]||o.recommendation;
-    holder.innerHTML='<div class="banner '+banner+'">'+esc(label)+' &mdash; '+esc(o.confidence)+' confidence</div>'
-     +'<div class="card"><div class="meta">'+esc(o.reasoning)+'</div>'
-     +'<div class="meta" style="margin-top:8px">'+esc(o.disclaimer)+'</div></div>';
-    btn.style.display="none";
-   } catch(e){
-    holder.innerHTML='<p class="err" style="margin-top:12px">'+String(e)+'</p>';
-   } finally {
-    if(btn.style.display!=="none"){ btn.disabled=false; btn.textContent="Get AI opinion ("+OPINION_COST[type]+")"; }
-   }
-  };
- },0);
- return '<div class="card" style="margin-top:4px">'
-  +'<div class="meta" style="margin:0 0 12px">Tier 3 &mdash; optional. The data above and your '
-  +'<a href="/cases">case queue</a> already have everything a human reviewer needs; this just adds '
-  +'a faster second opinion.</div>'
-  +'<button class="go" id="'+btnId+'" style="width:auto;padding:10px 20px;margin-top:0">Get AI opinion ('+OPINION_COST[type]+')</button>'
-  +'<div id="'+holderId+'"></div></div>';
-}
-
 $("go").onclick=async()=>{
  const name=$("name").value.trim();
  $("err").textContent="";
@@ -490,9 +435,7 @@ $("go").onclick=async()=>{
     +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
     +'<div class="meta">Recorded with a hash of the check facts, so this result cannot be '
     +'backdated or altered after the fact. Try the sanctioned-name example above to see a match.</div>'
-    +'</div>'
-    +opinionBlock("name", r.record.reference, ()=>({name:$("name").value.trim(),
-      dob:$("dob").value, country:$("country").value.trim(), entityType:$("type").value}));
+    +'</div>';
   } else {
    $("result").innerHTML='<div class="banner warn">Possible match &mdash; '
      +esc(r.screen.hits[0].name)+', '+esc(r.screen.hits[0].list)+', score '+r.screen.hits[0].score+'</div>'
@@ -503,9 +446,7 @@ $("go").onclick=async()=>{
     +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
     +'<div class="meta">This is a match result and a field comparison only. What you do with it '
-    +'&mdash; clear, escalate, hold a payment &mdash; is entirely your own process.</div></div>'
-    +opinionBlock("name", r.record.reference, ()=>({name:$("name").value.trim(),
-      dob:$("dob").value, country:$("country").value.trim(), entityType:$("type").value}));
+    +'&mdash; clear, escalate, hold a payment &mdash; is entirely your own process.</div></div>';
   }
  } catch(e){
   $("err").textContent=String(e);
@@ -540,8 +481,7 @@ $("go-address").onclick=async()=>{
     +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
     +'<div class="meta">'+esc(b.note)+' Try the sanctioned-address example above to see a hit.</div>'
-    +'</div>'
-    +opinionBlock("address", r.record.reference, ()=>({address:$("address").value.trim()}));
+    +'</div>';
   } else {
    $("result").innerHTML='<div class="banner warn">Match &mdash; on OFAC’s sanctioned '
      +'digital-currency address list ('+esc(b.matches.map(m=>m.asset).join(", "))+')</div>'
@@ -549,8 +489,7 @@ $("go-address").onclick=async()=>{
     +'<div class="kv"><span>Address</span><b style="word-break:break-all">'+esc(b.address)+'</b></div>'
     +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>2¢ &middot; '+ms+' ms</b></div>'
-    +'<div class="meta">'+esc(b.note)+'</div></div>'
-    +opinionBlock("address", r.record.reference, ()=>({address:$("address").value.trim()}));
+    +'<div class="meta">'+esc(b.note)+'</div></div>';
   }
  } catch(e){
   $("err-address").textContent=String(e);
@@ -605,8 +544,7 @@ $("go-website").onclick=async()=>{
    +'<div class="meta">'+esc(b.note)+'</div></div>'
    +'<div class="card">'
    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
-   +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>'
-   +opinionBlock("website", r.record.reference, ()=>({url:$("website").value.trim()}));
+   +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
   $("err-website").textContent=String(e);
  } finally {
@@ -638,8 +576,7 @@ $("go-email").onclick=async()=>{
    +'<div class="meta">'+esc(b.note)+'</div></div>'
    +'<div class="card">'
    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
-   +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>'
-   +opinionBlock("email", r.record.reference, ()=>({email:$("email").value.trim()}));
+   +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
   $("err-email").textContent=String(e);
  } finally {
@@ -671,8 +608,7 @@ $("go-ip").onclick=async()=>{
    +'<div class="meta">'+esc(b.note)+'</div></div>'
    +'<div class="card">'
    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
-   +'<div class="kv"><span>Cost</span><b>1&cent; &middot; '+ms+' ms</b></div></div>'
-   +opinionBlock("ip", r.record.reference, ()=>({ip:$("ip").value.trim()}));
+   +'<div class="kv"><span>Cost</span><b>1&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
   $("err-ip").textContent=String(e);
  } finally {

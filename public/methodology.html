@@ -89,7 +89,7 @@
   folded silently into a pass.
 
   <br><br><b>None of this involves an AI model.</b> Every signal on this page
-  — for every service except the optional tier-3 add-on at the bottom — is
+  — for every service — is
   plain deterministic code against a real data source. Given the same input
   and the same underlying data, it returns the same result every time.
  </div>
@@ -220,27 +220,6 @@
      etc.) are rejected outright with an error rather than a "low risk"
      result, since there's no public reputation to check for an address
      that isn't routable on the open internet.</p>
- </div>
-
- <h2 id="opinion">Tier 3: AI agent opinion <span style="font-weight:400;font-size:15px;color:var(--dim)">(add-on)</span></h2>
- <p class="svc-meta"><code>GET .../opinion</code> &middot; base price + $0.05 (+$0.06 total for IP)</p>
- <p>This is the one part of the product that does involve a model, and it's
-    worth being precise about what it does and doesn't do.</p>
-
- <table>
-  <tr><th>What it is</th><th></th></tr>
-  <tr><td class="sig">Input</td><td>The already-computed result from the matching check above — every signal, status, and detail. It changes nothing about how those signals are computed.</td></tr>
-  <tr><td class="sig">Output</td><td>A plain-English <code>clear</code> / <code>review</code> / <code>escalate</code> recommendation, a confidence level, and 2–4 sentences of reasoning — Claude Haiku reading the signals and narrating them for a non-technical reader.</td></tr>
-  <tr><td class="sig">What it is not</td><td>It does not re-run or override any signal above, does not look anything up on its own, and is not a compliance decision. Treat it as a faster first read, not a replacement for looking at the signals yourself.</td></tr>
- </table>
-
- <div class="gap">
-  <b>Worth remembering about any LLM output</b>
-  <p>Language models can misread a result or phrase something misleadingly
-     confident, same as any model-generated text. The underlying signals —
-     tier 1 — are the actual record of what was checked; the AI opinion is
-     commentary on top of that record, not a substitute for it. Every
-     opinion response carries this same disclaimer inline.</p>
  </div>
 
  <h2 id="updates">Keeping this page honest</h2>

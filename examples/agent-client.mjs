@@ -11,7 +11,6 @@
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs website example.com
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs email someone@example.com
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs ip 1.2.3.4
-//   PRIVATE_KEY=0x... node examples/agent-client.mjs opinion ip 1.2.3.4
 //
 // Requirements on your wallet:
 //   - Real USDC on Base mainnet (this hits production, not a testnet).
@@ -92,27 +91,6 @@ async function screenIp(ip) {
   console.log(JSON.stringify(result, null, 2));
 }
 
-// Tier 3: AI agent opinion. Re-runs the matching check above and adds an
-// LLM-generated clear/review/escalate recommendation on top of it.
-const OPINION_ROUTES = {
-  name: { path: "/screen/opinion", param: "name", price: "$0.07" },
-  address: { path: "/screen-address/opinion", param: "address", price: "$0.07" },
-  website: { path: "/screen-website/opinion", param: "url", price: "$0.07" },
-  email: { path: "/screen-email/opinion", param: "email", price: "$0.07" },
-  ip: { path: "/screen-ip/opinion", param: "ip", price: "$0.06" },
-};
-
-async function screenOpinion(type, value) {
-  const route = OPINION_ROUTES[type];
-  if (!route) {
-    console.error(`Unknown opinion type "${type}". Use one of: ${Object.keys(OPINION_ROUTES).join(", ")}`);
-    process.exit(1);
-  }
-  console.log(`Getting an AI opinion on ${type} "${value}" (${route.price})...`);
-  const result = await callPaid(route.path, { [route.param]: value });
-  console.log(JSON.stringify(result, null, 2));
-}
-
 const [, , cmd, ...args] = process.argv;
 
 if (cmd === "screen" && args[0]) {
@@ -125,8 +103,6 @@ if (cmd === "screen" && args[0]) {
   await screenEmail(args[0]);
 } else if (cmd === "ip" && args[0]) {
   await screenIp(args[0]);
-} else if (cmd === "opinion" && args[0] && args[1]) {
-  await screenOpinion(args[0], args[1]);
 } else {
   console.log("Usage:");
   console.log('  PRIVATE_KEY=0x... node examples/agent-client.mjs screen "Jane Doe"');
@@ -134,6 +110,5 @@ if (cmd === "screen" && args[0]) {
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs website example.com");
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs email someone@example.com");
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs ip 1.2.3.4");
-  console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs opinion ip 1.2.3.4");
   process.exit(1);
 }

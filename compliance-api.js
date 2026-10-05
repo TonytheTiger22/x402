@@ -7,7 +7,6 @@ import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/
 import { runWebsiteChecks } from "./checks/website-trust.js";
 import { runEmailChecks } from "./checks/email-trust.js";
 import { runIpChecks } from "./checks/ip-trust.js";
-import { generateOpinion } from "./checks/opinion.js";
 
 // Base mainnet (CAIP-2). Was "eip155:84532" (Base Sepolia testnet).
 const NETWORK = "eip155:8453";
@@ -118,69 +117,6 @@ app.use(paymentMiddleware(
         output: {
           example: { ip: "1.2.3.4", riskLevel: "low", redFlag: false, flagCount: 0, signals: [] },
         },
-      }),
-    }),
-    // Tier 3: "AI agent opinion" — re-runs the matching check above, then
-    // asks an LLM to narrate the already-computed signals into a plain
-    // recommendation. Priced as the base check + a flat AI premium.
-    "GET /screen/opinion": priced("$0.07", "AI opinion: sanctions screening", {
-      extensions: declareDiscoveryExtension({
-        method: "GET",
-        input: { name: "Jane Doe" },
-        inputSchema: {
-          properties: {
-            name: { type: "string", description: "Full name to screen" },
-            dob: { type: "string", description: "YYYY-MM-DD, optional" },
-            country: { type: "string", description: "Nationality, optional" },
-            type: { type: "string", enum: ["Individual", "Entity"] },
-          },
-          required: ["name"],
-        },
-        output: { example: { hitCount: 0, opinion: { recommendation: "clear", confidence: "high", reasoning: "..." } } },
-      }),
-    }),
-    "GET /screen-address/opinion": priced("$0.07", "AI opinion: crypto address screening", {
-      extensions: declareDiscoveryExtension({
-        method: "GET",
-        input: { address: "0x0000000000000000000000000000000000dEaD" },
-        inputSchema: {
-          properties: { address: { type: "string", description: "Wallet address on any supported chain" } },
-          required: ["address"],
-        },
-        output: { example: { sanctioned: false, opinion: { recommendation: "clear", confidence: "high", reasoning: "..." } } },
-      }),
-    }),
-    "GET /screen-website/opinion": priced("$0.07", "AI opinion: website trust", {
-      extensions: declareDiscoveryExtension({
-        method: "GET",
-        input: { url: "https://example.com" },
-        inputSchema: {
-          properties: { url: { type: "string", description: "A URL or bare domain to check" } },
-          required: ["url"],
-        },
-        output: { example: { riskLevel: "low", opinion: { recommendation: "clear", confidence: "high", reasoning: "..." } } },
-      }),
-    }),
-    "GET /screen-email/opinion": priced("$0.07", "AI opinion: email trust", {
-      extensions: declareDiscoveryExtension({
-        method: "GET",
-        input: { email: "someone@example.com" },
-        inputSchema: {
-          properties: { email: { type: "string", description: "Email address to check" } },
-          required: ["email"],
-        },
-        output: { example: { riskLevel: "low", opinion: { recommendation: "clear", confidence: "high", reasoning: "..." } } },
-      }),
-    }),
-    "GET /screen-ip/opinion": priced("$0.06", "AI opinion: IP risk check", {
-      extensions: declareDiscoveryExtension({
-        method: "GET",
-        input: { ip: "1.2.3.4" },
-        inputSchema: {
-          properties: { ip: { type: "string", description: "A public IPv4 address to check" } },
-          required: ["ip"],
-        },
-        output: { example: { riskLevel: "low", opinion: { recommendation: "clear", confidence: "high", reasoning: "..." } } },
       }),
     }),
   },
@@ -454,86 +390,6 @@ app.get("/context", async (req, res) => {
       uid: top.uid, score, matchedOn: top.basis,
     },
   });
-});
-
-// --- Tier 3: AI agent opinion routes. Each re-runs its matching check
-// (same logic as the plain route above) and adds an LLM narration on top —
-// never the other way around, so the opinion can never exist without the
-// deterministic signals it's reasoning over. ---
-
-app.get("/screen/opinion", async (req, res) => {
-  const subject = {
-    name: (req.query.name || "").trim(),
-    dob: req.query.dob || null,
-    country: req.query.country || null,
-    type: req.query.type || "Individual",
-  };
-  if (!subject.name) return res.json({ error: "name is required" });
-
-  const top = await bestMatch(subject.name);
-  const score = top ? Math.round(top.score * 100) / 100 : 0;
-  const hitCount = top && score >= HIT_THRESHOLD ? 1 : 0;
-  const result = {
-    subject, listsChecked: LISTS_CHECKED, screenedAt: new Date().toISOString(),
-    hitCount, hits: hitCount ? [{ list: "OFAC SDN", score, name: top.name }] : [],
-  };
-
-  const opinion = await generateOpinion({ checkType: "name", subjectLabel: subject.name, result });
-  res.json({ ...result, opinion });
-});
-
-app.get("/screen-address/opinion", async (req, res) => {
-  const address = (req.query.address || "").trim();
-  if (!address) return res.json({ error: "address is required" });
-
-  const matches = await lookupAddress(address);
-  const result = {
-    address, screenedAt: new Date().toISOString(), sanctioned: matches.length > 0,
-    matches: matches.map((m) => ({ asset: m.asset, source: m.source })),
-    source: "OFAC SDN digital currency addresses",
-  };
-
-  const opinion = await generateOpinion({ checkType: "address", subjectLabel: address, result });
-  res.json({ ...result, opinion });
-});
-
-app.get("/screen-website/opinion", async (req, res) => {
-  const url = (req.query.url || "").trim();
-  if (!url) return res.json({ error: "url is required" });
-  try {
-    const result = await runWebsiteChecks(url);
-    if (result.ok === false) return res.json(result);
-    const opinion = await generateOpinion({ checkType: "website", subjectLabel: result.domain || url, result });
-    res.json({ ...result, opinion });
-  } catch (err) {
-    res.status(500).json({ error: "Website check failed", detail: String(err?.message || err) });
-  }
-});
-
-app.get("/screen-email/opinion", async (req, res) => {
-  const email = (req.query.email || "").trim();
-  if (!email) return res.json({ error: "email is required" });
-  try {
-    const result = await runEmailChecks(email);
-    if (result.ok === false) return res.json(result);
-    const opinion = await generateOpinion({ checkType: "email", subjectLabel: result.email || email, result });
-    res.json({ ...result, opinion });
-  } catch (err) {
-    res.status(500).json({ error: "Email check failed", detail: String(err?.message || err) });
-  }
-});
-
-app.get("/screen-ip/opinion", async (req, res) => {
-  const ip = (req.query.ip || "").trim();
-  if (!ip) return res.json({ error: "ip is required" });
-  try {
-    const result = await runIpChecks(ip);
-    if (result.ok === false) return res.json(result);
-    const opinion = await generateOpinion({ checkType: "ip", subjectLabel: result.ip || ip, result });
-    res.json({ ...result, opinion });
-  } catch (err) {
-    res.status(500).json({ error: "IP check failed", detail: String(err?.message || err) });
-  }
 });
 
 app.listen(4025, () => console.log("Compliance API on 4025 (live OFAC data, staged comparison)"));

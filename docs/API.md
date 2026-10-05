@@ -236,49 +236,6 @@ reputation exists to check for a non-routable address. IPv6 isn't
 supported yet. VPN/hosting classification and community abuse reports
 (AbuseIPDB) aren't live yet — they need a paid key.
 
-## Three tiers
-
-Every check above is **tier 1**: raw, deterministic data, nothing added.
-Two more tiers sit on top of it, as separate things you can combine however
-you want — none of them replace tier 1, they're additive:
-
-- **Tier 2 — do it yourself.** Sign in at [payperscreen.com/login](https://payperscreen.com/login)
-  and any check with a hit or a flag lands in your own case queue to clear
-  or escalate. No extra charge — this is just what happens to a check
-  that's tied to a signed-in account.
-- **Tier 3 — AI agent opinion.** A `GET .../opinion` endpoint that re-runs
-  the matching check above, then asks an LLM (Claude Haiku) to read the
-  already-computed signals and return a plain-English recommendation. It
-  never re-derives or overrides the deterministic signals — it narrates
-  them. If the result is tied to a case from tier 2, the opinion attaches
-  to that same case record rather than creating a separate one.
-
-### `GET /screen/opinion`, `/screen-address/opinion`, `/screen-website/opinion`, `/screen-email/opinion`, `/screen-ip/opinion`
-
-Same query parameters as the matching tier-1 endpoint above. Priced at
-that endpoint's price plus a flat $0.05 AI premium ($0.06 for IP, since its
-base price is lower). Response is the tier-1 response shape with an added
-`opinion` object:
-
-```json
-{
-  "...": "...same fields as the matching tier-1 response...",
-  "opinion": {
-    "ok": true,
-    "recommendation": "clear",
-    "confidence": "high",
-    "reasoning": "Plain-English explanation, 2-4 sentences.",
-    "model": "claude-haiku-4-5-20251001",
-    "disclaimer": "AI-generated reasoning over the deterministic signals above — a second opinion, not a compliance decision."
-  }
-}
-```
-
-`recommendation` is one of `clear` / `review` / `escalate`. If the AI
-opinion isn't configured on this deployment (no API key set) or the model
-call fails, `opinion.ok` is `false` with an `error` field — the tier-1 data
-in the rest of the response is unaffected either way.
-
 ## What we check (current, honest state)
 
 - **Name screening**: OFAC SDN only, right now. We are not yet checking

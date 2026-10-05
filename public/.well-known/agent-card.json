@@ -1,6 +1,6 @@
 {
   "name": "PayPerScreen",
-  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription. Three tiers: raw data (every skill below), do-it-yourself case management (payperscreen.com/login), and an optional AI agent opinion layered on any check.",
+  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription.",
   "url": "https://payperscreen.com",
   "documentationUrl": "https://payperscreen.com/docs",
   "methodologyUrl": "https://payperscreen.com/methodology",
@@ -26,16 +26,37 @@
       "description": "Fuzzy name match against the OFAC Specially Designated Nationals (SDN) list.",
       "method": "GET",
       "path": "/screen",
-      "price": { "amount": "0.02", "currency": "USD" },
+      "price": {
+        "amount": "0.02",
+        "currency": "USD"
+      },
       "inputSchema": {
         "type": "object",
         "properties": {
-          "name": { "type": "string", "description": "Full name to screen" },
-          "dob": { "type": "string", "description": "YYYY-MM-DD, optional" },
-          "country": { "type": "string", "description": "Nationality, optional" },
-          "type": { "type": "string", "enum": ["Individual", "Entity"], "default": "Individual" }
+          "name": {
+            "type": "string",
+            "description": "Full name to screen"
+          },
+          "dob": {
+            "type": "string",
+            "description": "YYYY-MM-DD, optional"
+          },
+          "country": {
+            "type": "string",
+            "description": "Nationality, optional"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "Individual",
+              "Entity"
+            ],
+            "default": "Individual"
+          }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       }
     },
     {
@@ -44,7 +65,10 @@
       "description": "Field-by-field comparison between a screened subject and the matched sanctions record from a prior /screen hit.",
       "method": "GET",
       "path": "/context",
-      "price": { "amount": "0.05", "currency": "USD" }
+      "price": {
+        "amount": "0.05",
+        "currency": "USD"
+      }
     },
     {
       "id": "screen-address",
@@ -52,13 +76,21 @@
       "description": "Exact-match lookup against OFAC's sanctioned digital-currency address list.",
       "method": "GET",
       "path": "/screen-address",
-      "price": { "amount": "0.02", "currency": "USD" },
+      "price": {
+        "amount": "0.02",
+        "currency": "USD"
+      },
       "inputSchema": {
         "type": "object",
         "properties": {
-          "address": { "type": "string", "description": "Wallet address on any supported chain" }
+          "address": {
+            "type": "string",
+            "description": "Wallet address on any supported chain"
+          }
         },
-        "required": ["address"]
+        "required": [
+          "address"
+        ]
       }
     },
     {
@@ -67,13 +99,21 @@
       "description": "Deterministic composite of domain age, SSL certificate, certificate history, SPF, redirect behavior, security headers, and web-archive history. Returns riskLevel (low/medium/high) and redFlag.",
       "method": "GET",
       "path": "/screen-website",
-      "price": { "amount": "0.02", "currency": "USD" },
+      "price": {
+        "amount": "0.02",
+        "currency": "USD"
+      },
       "inputSchema": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "A URL or bare domain to check" }
+          "url": {
+            "type": "string",
+            "description": "A URL or bare domain to check"
+          }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ]
       }
     },
     {
@@ -82,13 +122,21 @@
       "description": "Deterministic composite of mail-server validity, disposable-domain detection, domain age, mailbox verification, blocklist status, MX provider, and typo-squat detection. Returns riskLevel (low/medium/high) and redFlag.",
       "method": "GET",
       "path": "/screen-email",
-      "price": { "amount": "0.02", "currency": "USD" },
+      "price": {
+        "amount": "0.02",
+        "currency": "USD"
+      },
       "inputSchema": {
         "type": "object",
         "properties": {
-          "email": { "type": "string", "description": "Email address to check" }
+          "email": {
+            "type": "string",
+            "description": "Email address to check"
+          }
         },
-        "required": ["email"]
+        "required": [
+          "email"
+        ]
       }
     },
     {
@@ -97,59 +145,22 @@
       "description": "Known-high-risk-IP check against the Spamhaus ZEN blocklist and the Tor exit-node list. IPv4 only. Returns riskLevel (low/medium/high) and redFlag.",
       "method": "GET",
       "path": "/screen-ip",
-      "price": { "amount": "0.01", "currency": "USD" },
+      "price": {
+        "amount": "0.01",
+        "currency": "USD"
+      },
       "inputSchema": {
         "type": "object",
         "properties": {
-          "ip": { "type": "string", "description": "A public IPv4 address to check" }
+          "ip": {
+            "type": "string",
+            "description": "A public IPv4 address to check"
+          }
         },
-        "required": ["ip"]
+        "required": [
+          "ip"
+        ]
       }
-    },
-    {
-      "id": "screen-opinion",
-      "name": "AI opinion: sanctions screening",
-      "description": "Tier 3. Re-runs screen-name, then asks an LLM to turn the result into a plain-English clear/review/escalate recommendation with reasoning. Narrates the existing result, never recomputes it.",
-      "method": "GET",
-      "path": "/screen/opinion",
-      "price": { "amount": "0.07", "currency": "USD" },
-      "inputSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
-    },
-    {
-      "id": "screen-address-opinion",
-      "name": "AI opinion: crypto address screening",
-      "description": "Tier 3 version of screen-address with an added LLM recommendation.",
-      "method": "GET",
-      "path": "/screen-address/opinion",
-      "price": { "amount": "0.07", "currency": "USD" },
-      "inputSchema": { "type": "object", "properties": { "address": { "type": "string" } }, "required": ["address"] }
-    },
-    {
-      "id": "screen-website-opinion",
-      "name": "AI opinion: website trust",
-      "description": "Tier 3 version of screen-website with an added LLM recommendation.",
-      "method": "GET",
-      "path": "/screen-website/opinion",
-      "price": { "amount": "0.07", "currency": "USD" },
-      "inputSchema": { "type": "object", "properties": { "url": { "type": "string" } }, "required": ["url"] }
-    },
-    {
-      "id": "screen-email-opinion",
-      "name": "AI opinion: email trust",
-      "description": "Tier 3 version of screen-email with an added LLM recommendation.",
-      "method": "GET",
-      "path": "/screen-email/opinion",
-      "price": { "amount": "0.07", "currency": "USD" },
-      "inputSchema": { "type": "object", "properties": { "email": { "type": "string" } }, "required": ["email"] }
-    },
-    {
-      "id": "screen-ip-opinion",
-      "name": "AI opinion: IP risk check",
-      "description": "Tier 3 version of screen-ip with an added LLM recommendation.",
-      "method": "GET",
-      "path": "/screen-ip/opinion",
-      "price": { "amount": "0.06", "currency": "USD" },
-      "inputSchema": { "type": "object", "properties": { "ip": { "type": "string" } }, "required": ["ip"] }
     }
   ],
   "referenceClient": "https://payperscreen.com/examples/agent-client.mjs"
