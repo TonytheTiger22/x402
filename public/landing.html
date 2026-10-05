@@ -154,6 +154,10 @@
  .ex:hover{text-decoration-color:currentColor}
 
  button{font:inherit;cursor:pointer}
+ .paybar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 18px;font:500 13px var(--sans);color:var(--dim)}
+ .pm{font:600 13px var(--sans);padding:6px 12px;border:1px solid var(--rule);background:var(--paper);color:var(--dim);cursor:pointer;border-radius:0}
+ .pm.active{border-color:var(--ink);color:var(--ink)}
+ #wallet-status{font-weight:400}
  .go{display:block;width:100%;background:var(--ink);color:var(--paper);border:0;
      border-radius:0;padding:14px 18px;font:600 15.5px var(--sans);margin-top:22px}
  .go:hover{background:#000}
@@ -235,6 +239,13 @@
    <button class="mode" id="tab-address">Wallet address</button>
    <button class="mode" id="tab-email">Email</button>
    <button class="mode" id="tab-ip">IP address</button>
+  </div>
+
+  <div class="paybar">
+   <span>Who pays:</span>
+   <button class="pm active" id="pm-site" title="The site pays the API from its own wallet">We cover it (demo)</button>
+   <button class="pm" id="pm-wallet" title="Pay per check in USDC on Base from your own wallet">My wallet (USDC on Base)</button>
+   <span id="wallet-status"></span>
   </div>
 
   <div id="card-name">
@@ -368,6 +379,73 @@ $("ex-email").onclick=()=>{ $("email").value="info@google.com"; };
 // stale. 1.1.1.1 is a stable, real public IP that should come back clean.
 $("ex-ip").onclick=()=>{ $("ip").value="1.1.1.1"; };
 
+// ---------- who pays: the site (demo) or the visitor's own wallet ----------
+let PAY_MODE="site", walletLoaded=null;
+function loadWalletLib(){
+ if(walletLoaded) return walletLoaded;
+ walletLoaded=new Promise((ok,bad)=>{
+  const sc=document.createElement("script"); sc.src="/wallet.js";
+  sc.onload=ok; sc.onerror=()=>{walletLoaded=null;bad(new Error("Couldn't load the wallet component. Check your connection and try again."));};
+  document.head.appendChild(sc);
+ });
+ return walletLoaded;
+}
+const short=(a)=>a.slice(0,6)+"…"+a.slice(-4);
+function setMode(m){
+ PAY_MODE=m;
+ $("pm-site").classList.toggle("active",m==="site");
+ $("pm-wallet").classList.toggle("active",m==="wallet");
+ if(m==="site") $("wallet-status").textContent="";
+}
+async function refreshWalletStatus(){
+ const w=window.PPSWallet; if(!w||!w.address){ $("wallet-status").textContent=""; return; }
+ let bal=""; try{ bal=" · "+(await w.usdcBalance()).toFixed(2)+" USDC"; }catch{}
+ $("wallet-status").textContent="Connected "+short(w.address)+bal+" · Base";
+}
+async function useWallet(){
+ $("wallet-status").textContent="Connecting…";
+ try{
+  await loadWalletLib();
+  if(!(await window.PPSWallet.hasWallet())) throw new Error("NO_WALLET");
+  await window.PPSWallet.connect();
+  window.PPSWallet.onChange(refreshWalletStatus);
+  setMode("wallet"); await refreshWalletStatus();
+ }catch(e){
+  setMode("site");
+  $("wallet-status").textContent = e.message==="NO_WALLET"
+   ? "No browser wallet found. Install MetaMask or Coinbase Wallet (or open this page inside your wallet app), then try again."
+   : /reject|denied|4001/i.test(e.message||"") ? "Connection cancelled." : "Couldn't connect: "+(e.message||e);
+ }
+}
+$("pm-site").onclick=()=>setMode("site");
+$("pm-wallet").onclick=useWallet;
+
+// POST JSON; in wallet mode the visitor's wallet signs the payment (x402) and we
+// check their USDC balance first so a short balance gives a clear message.
+async function post(url, body, needUsd){
+ if(PAY_MODE!=="wallet"){
+  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  return res.json();
+ }
+ const w=window.PPSWallet;
+ if(!w||!w.address) throw new Error("Connect your wallet first.");
+ try{ const bal=await w.usdcBalance();
+      if(needUsd && bal<needUsd) throw new Error("Not enough USDC on Base: this costs "+Math.round(needUsd*100)+"¢ and your wallet has "+bal.toFixed(2)+" USDC."); }
+ catch(e){ if(/Not enough USDC/.test(e.message)) throw e; /* balance read failed: let the payment attempt decide */ }
+ let res;
+ try{
+  res=await w.payFetch()(url,{method:"POST",headers:{"Content-Type":"application/json","X-Pay-Mode":"wallet"},body:JSON.stringify(body)});
+ }catch(e){
+  const m=String(e.message||e);
+  if(/reject|denied|4001|cancel/i.test(m)) throw new Error("You declined the payment in your wallet. Nothing was charged.");
+  throw new Error("Payment failed: "+m);
+ }
+ if(res.status===402) throw new Error("The payment wasn't accepted, so nothing was run. Check you have enough USDC on Base and try again.");
+ const r=await res.json();
+ refreshWalletStatus();
+ return r;
+}
+
 const STATUS_TAG={match:['y','agrees'],partial:['p','partial'],differs:['n','differs'],unknown:['u','no data']};
 function comparisonTable(fields){
  const rows=fields.map(f=>{
@@ -380,6 +458,12 @@ function comparisonTable(fields){
  return '<table><tr><th>Field</th><th>You entered</th><th>Listed party</th><th></th></tr>'+rows+'</table>';
 }
 
+function contextHtml(c){
+ return comparisonTable(c.fields)
+  +'<div class="meta">'+esc(c.meta.list)+' '+esc(c.meta.listVersion)+' &middot; '
+  +esc(c.meta.program)+' &middot; matched on: '+esc(c.meta.matchedOn)+'</div>';
+}
+
 $("go").onclick=async()=>{
  const name=$("name").value.trim();
  $("err").textContent="";
@@ -389,15 +473,12 @@ $("go").onclick=async()=>{
  $("result").innerHTML="";
 
  try{
-  const res=await fetch("/api/screen-free",{method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({name, country:$("country").value.trim(),
-                          dob:$("dob").value, type:$("type").value})});
-  const r=await res.json();
+  const r=await post("/api/screen-free", {name, country:$("country").value.trim(),
+                          dob:$("dob").value, type:$("type").value}, 0.02);
 
   if(!r.ok){$("err").textContent=r.error||"Something went wrong.";return;}
 
-  const cost=r.outcome==="hit"?"7¢":"2¢";
+  const cost=r.outcome==="hit"&&r.context?"7¢":"2¢";
   const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
 
   if(r.outcome==="clear"){
@@ -413,17 +494,28 @@ $("go").onclick=async()=>{
   } else {
    $("result").innerHTML='<div class="banner warn">Possible match &mdash; '
      +esc(r.screen.hits[0].name)+', '+esc(r.screen.hits[0].list)+', score '+r.screen.hits[0].score+'</div>'
-    +'<div class="card">'+comparisonTable(r.context.fields)
-    +'<div class="meta">'+esc(r.context.meta.list)+' '+esc(r.context.meta.listVersion)+' &middot; '
-      +esc(r.context.meta.program)+' &middot; matched on: '+esc(r.context.meta.matchedOn)+'</div></div>'
+    +'<div class="card" id="ctx-slot">'+(r.context?contextHtml(r.context)
+      :'<button class="go" id="get-context" style="margin-top:4px">Get the field comparison &mdash; 5&cent; from your wallet</button>'
+       +'<div class="price">A second payment, signed in your wallet. Compares what you entered against the listed party.</div>'
+       +'<div id="ctx-err" class="err"></div>')+'</div>'
     +'<div class="card">'
     +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
     +'<div class="kv"><span>Cost</span><b>'+cost+' &middot; '+ms+' ms</b></div>'
     +'<div class="meta">This is a match result and a field comparison only. What you do with it '
     +'&mdash; clear, escalate, hold a payment &mdash; is entirely your own process.</div></div>';
+   const gc=$("get-context");
+   if(gc) gc.onclick=async()=>{
+    gc.disabled=true; gc.textContent="Waiting for your wallet…"; $("ctx-err").textContent="";
+    try{
+     const c=await post("/api/wallet-context",{name, country:$("country").value.trim(),
+                                               dob:$("dob").value, type:$("type").value}, 0.05);
+     if(!c.ok) throw new Error(c.error||"Couldn't get the comparison.");
+     $("ctx-slot").innerHTML=contextHtml(c.context);
+    }catch(e){ $("ctx-err").textContent=String(e.message||e); gc.disabled=false; gc.innerHTML="Get the field comparison &mdash; 5&cent; from your wallet"; }
+   };
   }
  } catch(e){
-  $("err").textContent=String(e);
+  $("err").textContent=(e.message||String(e));
  } finally {
   $("go").disabled=false; $("go").textContent="Screen this subject";
  }
@@ -438,10 +530,7 @@ $("go-address").onclick=async()=>{
  $("result").innerHTML="";
 
  try{
-  const res=await fetch("/api/screen-address",{method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({address})});
-  const r=await res.json();
+  const r=await post("/api/screen-address", {address}, 0.02);
 
   if(!r.ok){$("err-address").textContent=r.error||"Something went wrong.";return;}
 
@@ -466,7 +555,7 @@ $("go-address").onclick=async()=>{
     +'<div class="meta">'+esc(b.note)+'</div></div>';
   }
  } catch(e){
-  $("err-address").textContent=String(e);
+  $("err-address").textContent=(e.message||String(e));
  } finally {
   $("go-address").disabled=false; $("go-address").textContent="Screen this address";
  }
@@ -503,10 +592,7 @@ $("go-email").onclick=async()=>{
  $("result").innerHTML="";
 
  try{
-  const res=await fetch("/api/check-email",{method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({email})});
-  const r=await res.json();
+  const r=await post("/api/check-email", {email}, 0.02);
 
   if(!r.ok){$("err-email").textContent=r.error||"Something went wrong.";return;}
 
@@ -520,7 +606,7 @@ $("go-email").onclick=async()=>{
    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
    +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
-  $("err-email").textContent=String(e);
+  $("err-email").textContent=(e.message||String(e));
  } finally {
   $("go-email").disabled=false; $("go-email").textContent="Check this email";
  }
@@ -535,10 +621,7 @@ $("go-ip").onclick=async()=>{
  $("result").innerHTML="";
 
  try{
-  const res=await fetch("/api/check-ip",{method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({ip})});
-  const r=await res.json();
+  const r=await post("/api/check-ip", {ip}, 0.01);
 
   if(!r.ok){$("err-ip").textContent=r.error||"Something went wrong.";return;}
 
@@ -552,7 +635,7 @@ $("go-ip").onclick=async()=>{
    +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
    +'<div class="kv"><span>Cost</span><b>1&cent; &middot; '+ms+' ms</b></div></div>';
  } catch(e){
-  $("err-ip").textContent=String(e);
+  $("err-ip").textContent=(e.message||String(e));
  } finally {
   $("go-ip").disabled=false; $("go-ip").textContent="Check this IP";
  }

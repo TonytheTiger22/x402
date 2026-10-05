@@ -20,9 +20,58 @@ const API = process.env.COMPLIANCE_API_URL || "http://localhost:4025";
 const LIST_VERSION = "OFAC-2026-08-17";
 
 const ledger = { spent: 0, lines: [] };
+// What the browser sees as "ledger": the site's running spend normally; in wallet mode
+// just the visitor's own call (so the site's spend isn't touched or shown).
+const ledgerFor = (req, line) => isWallet(req) ? { spent: line.price, lines: [line] } : ledger;
 const txOf = (h) => (JSON.stringify(h ?? {}).match(/0x[0-9a-fA-F]{64}/) || [])[0] || null;
 
-async function buyQuery(path, params, label, price) {
+// ---- Wallet mode -----------------------------------------------------------
+// Normally the site pays the API from its own wallet (BUYER_KEY). In wallet
+// mode (request header X-Pay-Mode: wallet) the visitor's browser does the
+// x402 handshake instead: this server just relays the call to the paid API,
+// forwarding the visitor's signed payment header and passing the API's 402
+// challenge / settlement headers back. The site wallet is never charged.
+const isWallet = (req) => String(req?.headers?.["x-pay-mode"] || "").toLowerCase() === "wallet";
+const PAY_HEADERS_IN = ["payment-signature", "x-payment"];
+const PAY_HEADERS_OUT = ["payment-required", "payment-response", "x-payment-response"];
+
+class Passthrough extends Error {            // upstream said "not paid / not OK"; relay it as-is
+  constructor(status, headers, body) { super(`upstream ${status}`); this.status = status; this.headers = headers; this.body = body; }
+}
+// Sends a Passthrough to the browser, or returns false if `err` is something else.
+function relay(res, err) {
+  if (!(err instanceof Passthrough)) return false;
+  for (const [k, v] of Object.entries(err.headers)) res.set(k, v);
+  res.status(err.status).send(err.body);
+  return true;
+}
+function decodeB64Json(h) { try { return JSON.parse(Buffer.from(h, "base64").toString("utf8")); } catch { return null; } }
+
+async function walletBuy(req, path, params, label, price) {
+  const t0 = Date.now();
+  const headers = {};
+  for (const h of PAY_HEADERS_IN) if (req.headers[h]) headers[h] = String(req.headers[h]);
+  const qs = new URLSearchParams(params).toString();
+  const r = await fetch(`${API}${path}?${qs}`, { method: "GET", headers });
+  const text = await r.text();
+  if (r.status !== 200) {
+    const out = {};
+    for (const h of PAY_HEADERS_OUT) if (r.headers.get(h)) out[h] = r.headers.get(h);
+    out["content-type"] = r.headers.get("content-type") || "application/json";
+    throw new Passthrough(r.status, out, text);
+  }
+  const settleHeader = r.headers.get("payment-response") || r.headers.get("x-payment-response");
+  if (!settleHeader) throw new Error("The API returned a result without a payment receipt");
+  const settled = decodeB64Json(settleHeader);
+  if (settled && settled.success === false) throw new Error("Payment did not settle");
+  req.res.set("PAYMENT-RESPONSE", settleHeader);
+  const line = { label, price, ms: Date.now() - t0, tx: txOf(settled ?? settleHeader), payer: "visitor wallet",
+                 at: new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}) };
+  return { body: JSON.parse(text), line };
+}
+
+async function buyQuery(path, params, label, price, req) {
+  if (req && isWallet(req)) return walletBuy(req, path, params, label, price);
   const t0 = Date.now();
   const qs = new URLSearchParams(params).toString();
   const r = await fetchWithPayment(`${API}${path}?${qs}`, { method: "GET" });
@@ -286,7 +335,7 @@ app.post("/api/screen-free", async (req, res) => {
 
   try {
     const screen = await buyQuery("/screen", { name, dob, country, type },
-                                  "Sanctions screening", 0.02);
+                                  "Sanctions screening", 0.02, req);
     const b = screen.body;
 
     const rec = audit.record({
@@ -305,7 +354,14 @@ app.post("/api/screen-free", async (req, res) => {
     if (b.hitCount === 0) {
       audit.dispose(rec.reference, "no_match_auto", "system");
       return res.json({ ok: true, outcome: "clear", screen: b,
-                        record: audit.get(rec.reference), ledger });
+                        record: audit.get(rec.reference), ledger: ledgerFor(req, screen.line) });
+    }
+
+    // Wallet mode: the field comparison is a second, separate payment the visitor
+    // signs on their own (POST /api/wallet-context), so stop here.
+    if (isWallet(req)) {
+      return res.json({ ok: true, outcome: "hit", screen: b, context: null,
+                        record: audit.get(rec.reference), ledger: ledgerFor(req, screen.line) });
     }
 
     const context = await buyQuery("/context", { name, dob, country, type },
@@ -314,7 +370,24 @@ app.post("/api/screen-free", async (req, res) => {
                record: rec, ledger });
 
   } catch (err) {
+    if (relay(res, err)) return;
     res.json({ ok: false, error: String(err), ledger });
+  }
+});
+
+// Wallet mode only: the 5¢ field comparison for a hit, paid by the visitor's wallet.
+app.post("/api/wallet-context", async (req, res) => {
+  if (!isWallet(req)) return res.status(400).json({ ok: false, error: "Wallet mode only" });
+  const name = (req.body.name || "").trim();
+  if (!name) return res.json({ ok: false, error: "Name is required" });
+  try {
+    const context = await buyQuery("/context",
+      { name, dob: req.body.dob || "", country: req.body.country || "", type: req.body.type || "Individual" },
+      "Field comparison", 0.05, req);
+    res.json({ ok: true, context: context.body, ledger: ledgerFor(req, context.line) });
+  } catch (err) {
+    if (relay(res, err)) return;
+    res.json({ ok: false, error: String(err) });
   }
 });
 
@@ -324,7 +397,7 @@ app.post("/api/screen-address", async (req, res) => {
 
   try {
     const screen = await buyQuery("/screen-address", { address },
-                                  "Crypto address screening", 0.02);
+                                  "Crypto address screening", 0.02, req);
     const b = screen.body;
 
     const rec = audit.record({
@@ -342,9 +415,10 @@ app.post("/api/screen-address", async (req, res) => {
 
     if (!b.sanctioned) audit.dispose(rec.reference, "no_match_auto", "system");
 
-    res.json({ ok: true, screen: b, record: audit.get(rec.reference), ledger });
+    res.json({ ok: true, screen: b, record: audit.get(rec.reference), ledger: ledgerFor(req, screen.line) });
 
   } catch (err) {
+    if (relay(res, err)) return;
     res.json({ ok: false, error: String(err), ledger });
   }
 });
@@ -355,7 +429,7 @@ app.post("/api/check-email", async (req, res) => {
 
   try {
     const check = await buyQuery("/screen-email", { email },
-                                  "Email trust check", 0.02);
+                                  "Email trust check", 0.02, req);
     const b = check.body;
     if (b.ok === false) return res.json({ ok: false, error: b.error || "Could not check that address" });
 
@@ -374,8 +448,9 @@ app.post("/api/check-email", async (req, res) => {
 
     if (b.riskLevel === "low") audit.dispose(rec.reference, "no_match_auto", "system");
 
-    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
+    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger: ledgerFor(req, check.line) });
   } catch (err) {
+    if (relay(res, err)) return;
     res.json({ ok: false, error: String(err), ledger });
   }
 });
@@ -385,7 +460,7 @@ app.post("/api/check-ip", async (req, res) => {
   if (!ip) return res.json({ ok: false, error: "An IP address is required" });
 
   try {
-    const check = await buyQuery("/screen-ip", { ip }, "IP risk check", 0.01);
+    const check = await buyQuery("/screen-ip", { ip }, "IP risk check", 0.01, req);
     const b = check.body;
     if (b.ok === false) return res.json({ ok: false, error: b.error || "Could not check that address" });
 
@@ -404,8 +479,9 @@ app.post("/api/check-ip", async (req, res) => {
 
     if (b.riskLevel === "low") audit.dispose(rec.reference, "no_match_auto", "system");
 
-    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
+    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger: ledgerFor(req, check.line) });
   } catch (err) {
+    if (relay(res, err)) return;
     res.json({ ok: false, error: String(err), ledger });
   }
 });

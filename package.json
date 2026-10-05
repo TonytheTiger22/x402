@@ -5,7 +5,8 @@
   "main": "payment-agent.js",
   "scripts": {
     "start": "node payment-agent.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:wallet": "esbuild wallet-client/index.js --bundle --minify --format=iife --platform=browser --define:process.env.NODE_ENV=\\\"production\\\" --outfile=public/wallet.js"
   },
   "repository": {
     "type": "git",
@@ -34,5 +35,8 @@
     "marked": "^18.0.14",
     "pg": "^8.23.0",
     "viem": "^2.55.18"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }
