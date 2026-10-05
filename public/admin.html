@@ -101,6 +101,12 @@
   <div class="lbl">Open alerts — all accounts</div>
   <div id="tbl">Loading&hellip;</div>
  </div>
+ <div class="card wide">
+  <div class="lbl">Site visitors — last 30 days</div>
+  <div id="visits">Loading&hellip;</div>
+  <div class="note">Counted server-side, no cookies, no raw IPs stored. "Visitors" = distinct
+   visitors per day (the same person on two days counts twice). Bots filtered by user-agent.</div>
+ </div>
  <div id="detail"></div>
 </div>
 
@@ -190,7 +196,20 @@ async function loadCases(){
  rows=r.alerts; draw();
 }
 
-function showDash(){ $("gate").style.display="none"; $("dash").style.display=""; loadCases(); }
+async function loadVisits(){
+ const r=await(await fetch("/api/admin/visits?days=30")).json();
+ if(!r.ok){ $("visits").textContent=r.error||"Couldn't load."; return; }
+ const t=r.totals;
+ const list=(rows,k)=>rows.length?'<table><tr><th>'+(k==="path"?"Page":"Referrer")+'</th><th>Views</th></tr>'
+   +rows.map(x=>'<tr><td>'+esc(x[k])+'</td><td>'+x.views+'</td></tr>').join('')+'</table>':'<div class="note">None yet.</div>';
+ $("visits").innerHTML='<div class="kv"><span>Page views</span><b>'+t.views+'</b></div>'
+  +'<div class="kv"><span>Visitor-days</span><b>'+t.visitor_days+'</b></div>'
+  +(r.perDay.length?'<table><tr><th>Day</th><th>Views</th><th>Visitors</th></tr>'
+   +r.perDay.map(d=>'<tr><td>'+esc(d.day)+'</td><td>'+d.views+'</td><td>'+d.visitors+'</td></tr>').join('')+'</table>'
+   :'<div class="note">No visits recorded yet.</div>')
+  +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px"><div>'+list(r.pages,"path")+'</div><div>'+list(r.referrers,"referrer")+'</div></div>';
+}
+function showDash(){ $("gate").style.display="none"; $("dash").style.display=""; loadCases(); loadVisits(); }
 function showGate(){ $("gate").style.display=""; $("dash").style.display="none"; }
 
 fetch("/api/admin/me").then(r=>r.json()).then(r=>{ if(r.isAdmin) showDash(); });

@@ -7,6 +7,7 @@ import { marked } from "marked";
 import { readFileSync } from "fs";
 import * as audit from "./audit-store.js";
 import * as accounts from "./accounts-store.js";
+import * as analytics from "./analytics-store.js";
 
 const signer = privateKeyToAccount(process.env.BUYER_KEY);
 console.log("Buyer wallet address:", signer.address);
@@ -64,6 +65,9 @@ app.use((req, _res, next) => {
   req.isAdmin = accounts.isAdminSession(req.cookies.admin_session);
   next();
 });
+
+// Count real page views (no cookies, no raw IPs) — see analytics-store.js.
+app.use((req, _res, next) => { analytics.track(req); next(); });
 
 app.use(express.static("public"));
 app.use("/examples", express.static("examples"));
@@ -193,6 +197,11 @@ app.post("/api/admin/logout", (req, res) => {
 });
 
 app.get("/api/admin/me", (req, res) => res.json({ ok: true, isAdmin: !!req.isAdmin }));
+
+app.get("/api/admin/visits", (req, res) => {
+  if (!req.isAdmin) return res.status(401).json({ ok: false, error: "Admin login required" });
+  res.json({ ok: true, ...analytics.summary(Math.min(+req.query.days || 30, 365)) });
+});
 
 app.get("/api/admin/cases", (req, res) => {
   if (!req.isAdmin) return res.status(401).json({ ok: false, error: "Admin login required" });
