@@ -77,7 +77,7 @@
 
  <div class="callout">
   <b>How to read "risk level"</b>
-  The website, email, and IP checks don't use a list match — they run several
+  The email and IP checks don't use a list match — they run several
   independent signals and combine them. Each signal is marked <span class="sev critical">critical</span>
   or <span class="sev minor">minor</span> ahead of time, based on how strong a problem it would mean on
   its own. A single flagged critical signal sets <code>redFlag: true</code>
@@ -141,49 +141,18 @@
      parties, or isn't a mixer/exchange hot wallet.</p>
  </div>
 
- <h2 id="website">Website trust check</h2>
- <p class="svc-meta"><code>GET /screen-website</code> &middot; $0.02</p>
- <p>A "fan-out and score" composite: 7 independent signals run in parallel,
-    each judged pass/flag/unknown, then combined into one risk level.</p>
-
- <table>
-  <tr><th>Signal</th><th>Severity</th><th>What it actually checks</th></tr>
-  <tr><td class="sig">Domain registration age</td><td><span class="sev minor">minor</span></td><td>How long ago the domain was registered, via RDAP. Flagged if under 30 days old — young domains are common for legitimate new projects too, which is exactly why this is minor, not critical, on its own.</td></tr>
-  <tr><td class="sig">SSL certificate</td><td><span class="sev critical">critical</span></td><td>We connect directly and read the certificate the server actually presents — expired or untrusted is flagged outright.</td></tr>
-  <tr><td class="sig">Certificate history</td><td><span class="sev minor">minor</span></td><td>Full public log of every SSL certificate ever issued for the domain, via crt.sh — a second, independent age signal that's harder to privacy-mask than registration data.</td></tr>
-  <tr><td class="sig">Email authentication (SPF)</td><td><span class="sev minor">minor</span></td><td>Whether the domain publishes an SPF record. Flagged if absent — common and not alarming for a small static site that sends no mail at all.</td></tr>
-  <tr><td class="sig">Redirect behavior</td><td><span class="sev critical">critical</span></td><td>We follow the site's redirect chain ourselves. Flagged if it lands on an unrelated domain, or takes more than 3 hops — a strong phishing/hijack pattern.</td></tr>
-  <tr><td class="sig">Security headers</td><td><span class="sev minor">minor</span></td><td>Whether the response sets HSTS or a Content-Security-Policy header. Flagged if neither is present.</td></tr>
-  <tr><td class="sig">Web archive history</td><td><span class="sev minor">minor</span></td><td>Whether the Wayback Machine has an archived snapshot, and how old the earliest one is — independent corroboration of how long the site has actually existed.</td></tr>
- </table>
-
- <div class="gap">
-  <b>What we do NOT check yet</b>
-  <p>Three more signals are designed but not live — each needs a free API
-     key we haven't signed up for yet: a phishing/malware blocklist (Google
-     Safe Browsing), a multi-engine URL reputation aggregator (VirusTotal),
-     and hosting/IP abuse reputation (AbuseIPDB). We also deliberately do
-     not actively scan the target's infrastructure (port scanning) — every
-     signal above is passive, reading only what the server already
-     volunteers.</p>
- </div>
-
- <div class="note">A "low risk" result reflects only the 7 signals above —
-    it is not a statement that the site is safe, only that none of these 7
-    specific things came back flagged.</div>
-
  <h2 id="email">Email trust check</h2>
  <p class="svc-meta"><code>GET /screen-email</code> &middot; $0.02</p>
- <p>The same fan-out-and-score approach as the website check — 10 signals,
-    all of them free and zero-key.</p>
+ <p>A "fan-out and score" composite: 10 independent signals run in parallel,
+    each judged pass/flag/unknown, then combined into one risk level. All of them are free and zero-key.</p>
 
  <table>
   <tr><th>Signal</th><th>Severity</th><th>What it actually checks</th></tr>
   <tr><td class="sig">Syntax and mail server</td><td><span class="sev critical">critical</span></td><td>Valid address format and the domain has an MX record at all. A domain that can't receive mail is flagged outright.</td></tr>
   <tr><td class="sig">Disposable email provider</td><td><span class="sev critical">critical</span></td><td>Checked against a maintained open-source list of known disposable/temp-mail domains (10minutemail, etc.).</td></tr>
   <tr><td class="sig">Provider type</td><td><span class="sev info">informational</span></td><td>Consumer free-mail (Gmail, Yahoo, etc.) vs. a custom/corporate domain. Never flags either way on its own.</td></tr>
-  <tr><td class="sig">Domain registration age</td><td><span class="sev minor">minor</span></td><td>Same RDAP age check as the website trust signal, under 30 days flagged.</td></tr>
-  <tr><td class="sig">Domain certificate history</td><td><span class="sev minor">minor</span></td><td>crt.sh certificate history for the domain, same method as the website check.</td></tr>
+  <tr><td class="sig">Domain registration age</td><td><span class="sev minor">minor</span></td><td>How long ago the domain was registered, via RDAP. Flagged if under 30 days old.</td></tr>
+  <tr><td class="sig">Domain certificate history</td><td><span class="sev minor">minor</span></td><td>Public log of every SSL certificate ever issued for the domain, via crt.sh — an independent age signal.</td></tr>
   <tr><td class="sig">Mailbox verification</td><td><span class="sev critical">critical</span></td><td><b>Best-effort.</b> We connect to the domain's mail server and ask if the specific mailbox would accept mail (no message sent). Many mail servers block this or accept every address regardless (a "catch-all") — both cases come back <code>unknown</code>, never a false "verified."</td></tr>
   <tr><td class="sig">Mail server reputation (DNSBL)</td><td><span class="sev critical">critical</span></td><td>The mail server's IP checked against the Spamhaus ZEN blocklist — the same blocklist the IP risk check uses.</td></tr>
   <tr><td class="sig">Mail provider</td><td><span class="sev info">informational</span></td><td>Identifies well-known infrastructure (Google Workspace, Microsoft 365, Zoho, etc.) by fingerprinting the mail server hostname. Informational only.</td></tr>

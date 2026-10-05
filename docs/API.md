@@ -157,49 +157,9 @@ Supported assets: `XBT` (Bitcoin), `ETH`, `USDT`, `USDC`, `TRX`, `SOL`,
 `LTC`, `BCH`, `ARB`, `BSC`, `ETC`, `DASH`, `XMR`, `ZEC`, `XVG`, `BTG`,
 `BSV`, `XRP`.
 
-### `GET /screen-website` — $0.02
-
-A deterministic "fan-out and score" composite — not a list match. Seven
-free, zero-key signals run in parallel: domain age (RDAP), SSL certificate
-validity, certificate transparency history, SPF presence, redirect-chain
-behavior, security headers, and web-archive history. No LLM calls
-anywhere in this path.
-
-**Query parameters**
-
-| Param | Required | Notes                        |
-|-------|----------|-------------------------------|
-| `url` | yes      | A URL or bare domain to check |
-
-**Response**
-
-```json
-{
-  "ok": true,
-  "domain": "example.com",
-  "riskLevel": "low",
-  "redFlag": false,
-  "redFlagSignals": [],
-  "flagCount": 0,
-  "unknownCount": 0,
-  "signalsChecked": 7,
-  "signals": [ { "id": "ssl_certificate", "label": "SSL certificate", "severity": "critical", "status": "pass", "detail": "..." } ],
-  "note": "..."
-}
-```
-
-`riskLevel` is `low`, `medium`, or `high`. A flagged **critical** signal
-(bad/expired cert, a redirect that lands on an unrelated domain) sets
-`redFlag: true` and `riskLevel: "high"` on its own, regardless of how many
-minor signals also flagged — see `redFlagSignals` for which ones fired.
-Three further signals (malware/phishing blocklist, URL reputation
-aggregator, hosting reputation) are designed but not yet live — they need
-a free API key that hasn't been provisioned yet.
-
 ### `GET /screen-email` — $0.02
 
-The same composite approach as `/screen-website`, for email addresses.
-Ten signals, all zero-key: syntax/MX validity, disposable-domain check,
+A deterministic "fan-out and score" composite — not a list match. Ten signals, all zero-key: syntax/MX validity, disposable-domain check,
 free-mail classification, domain age, certificate transparency, an SMTP
 mailbox probe (best-effort — some mail servers block it or accept every
 address), DNSBL (Spamhaus), MX provider fingerprinting, typo-squat
@@ -211,8 +171,28 @@ detection, and role-account detection.
 |---------|----------|--------------------------|
 | `email` | yes      | Email address to check  |
 
-**Response** shape matches `/screen-website` (`riskLevel`, `redFlag`,
-`redFlagSignals`, `signals`), with `email` in place of `domain`.
+**Response**
+
+```json
+{
+  "ok": true,
+  "email": "someone@example.com",
+  "riskLevel": "low",
+  "redFlag": false,
+  "redFlagSignals": [],
+  "flagCount": 0,
+  "unknownCount": 0,
+  "signalsChecked": 10,
+  "signals": [ { "id": "disposable_domain", "label": "Disposable email provider", "severity": "critical", "status": "pass", "detail": "..." } ],
+  "note": "..."
+}
+```
+
+`riskLevel` is `low`, `medium`, or `high`. A flagged **critical** signal
+(disposable provider, no mail server, look-alike domain, etc.) sets
+`redFlag: true` and `riskLevel: "high"` on its own, regardless of how many
+minor signals also flagged — see `redFlagSignals` for which ones fired.
+Signals that couldn't be evaluated are `unknown`, never counted as a pass.
 
 ### `GET /screen-ip` — $0.01 (beta)
 
@@ -228,8 +208,8 @@ legitimate traffic comes from datacenter IPs, so it's not scored.
 |-------|----------|-------------------------------|
 | `ip`  | yes      | A public IPv4 address to check |
 
-**Response** shape matches `/screen-website` (`riskLevel`, `redFlag`,
-`redFlagSignals`, `signals`), with `ip` in place of `domain`. Private/
+**Response** shape matches `/screen-email` (`riskLevel`, `redFlag`,
+`redFlagSignals`, `signals`), with `ip` in place of `email`. Private/
 reserved addresses (RFC 1918, loopback, etc.) and anything that isn't a
 valid IPv4 address return `{ "ok": false, "error": "..." }` instead — no
 reputation exists to check for a non-routable address. IPv6 isn't

@@ -1,4 +1,4 @@
-// IP risk check — beta. A "fan-out and score" composite like the website
+// IP risk check — beta. A "fan-out and score" composite like the email
 // and email checks, built around known-high-risk-IP lists rather than a
 // paid reputation API. Zero signups: Spamhaus ZEN is a DNSBL (a DNS query
 // against a public blocklist zone) and the Tor Project publishes its own

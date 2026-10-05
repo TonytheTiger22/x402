@@ -1,6 +1,6 @@
 {
   "name": "PayPerScreen",
-  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription.",
+  "description": "Pay-per-call sanctions, crypto-wallet, email, and IP risk screening, priced in USDC and authenticated entirely by x402 micropayments. No account, no API key, no subscription.",
   "url": "https://payperscreen.com",
   "documentationUrl": "https://payperscreen.com/docs",
   "methodologyUrl": "https://payperscreen.com/methodology",
@@ -90,29 +90,6 @@
         },
         "required": [
           "address"
-        ]
-      }
-    },
-    {
-      "id": "screen-website",
-      "name": "Website trust check",
-      "description": "Deterministic composite of domain age, SSL certificate, certificate history, SPF, redirect behavior, security headers, and web-archive history. Returns riskLevel (low/medium/high) and redFlag.",
-      "method": "GET",
-      "path": "/screen-website",
-      "price": {
-        "amount": "0.02",
-        "currency": "USD"
-      },
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "A URL or bare domain to check"
-          }
-        },
-        "required": [
-          "url"
         ]
       }
     },

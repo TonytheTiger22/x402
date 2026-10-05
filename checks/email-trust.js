@@ -1,6 +1,6 @@
 // Email trust check — a "fan-out and score" composite over free, zero-key
 // sources only. No LLM calls anywhere in this path. All ten signals from
-// the roadmap doc are implemented here — unlike the website check, none
+// the roadmap doc are implemented here — none
 // of these need a paid API key.
 
 import { readFileSync } from "fs";
@@ -139,7 +139,7 @@ export async function runEmailChecks(input) {
     detail: ageDays == null ? "Registration date not available" : `Registered ${ageDays} day(s) ago`,
   });
 
-  // 5. Certificate Transparency history (reuses the website-check primitive)
+  // 5. Certificate Transparency history (shared primitive)
   const ctAgeDays = crt?.earliestCertAt ? daysSince(crt.earliestCertAt) : null;
   signals.push({
     id: "cert_transparency",

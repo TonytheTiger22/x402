@@ -206,7 +206,6 @@ app.get("/api/admin/cases", (req, res) => {
 const TEST_CASE_TYPES = {
   name:    { clientRef: "LANDING",         lists: ["OFAC SDN"] },
   address: { clientRef: "LANDING-ADDRESS", lists: ["OFAC Crypto Addresses"] },
-  website: { clientRef: "LANDING-WEBSITE", lists: ["Website trust signals"] },
   email:   { clientRef: "LANDING-EMAIL",   lists: ["Email trust signals"] },
   ip:      { clientRef: "LANDING-IP",      lists: ["IP risk signals (beta)"] },
 };
@@ -334,37 +333,6 @@ app.post("/api/screen-address", async (req, res) => {
 
     res.json({ ok: true, screen: b, record: audit.get(rec.reference), ledger });
 
-  } catch (err) {
-    res.json({ ok: false, error: String(err), ledger });
-  }
-});
-
-app.post("/api/check-website", async (req, res) => {
-  const url = (req.body.url || "").trim();
-  if (!url) return res.json({ ok: false, error: "A website address is required" });
-
-  try {
-    const check = await buyQuery("/screen-website", { url },
-                                  "Website trust check", 0.02);
-    const b = check.body;
-    if (b.ok === false) return res.json({ ok: false, error: b.error || "Could not check that site" });
-
-    const rec = audit.record({
-      subject: { name: b.domain, dob: null, country: null },
-      listsChecked: ["Website trust signals"],
-      listVersion: LIST_VERSION,
-      hitCount: b.flagCount,
-      topScore: null,
-      topMatch: b.riskLevel,
-      clientRef: "LANDING-WEBSITE",
-      accountId: req.account?.id ?? null,
-      pricePaid: 0.02,
-      paymentTx: check.line.tx,
-    });
-
-    if (b.riskLevel === "low") audit.dispose(rec.reference, "no_match_auto", "system");
-
-    res.json({ ok: true, check: b, record: audit.get(rec.reference), ledger });
   } catch (err) {
     res.json({ ok: false, error: String(err), ledger });
   }

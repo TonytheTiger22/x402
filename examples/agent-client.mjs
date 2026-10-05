@@ -8,7 +8,6 @@
 // Usage:
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs screen "Jane Doe"
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs address 0x1234...
-//   PRIVATE_KEY=0x... node examples/agent-client.mjs website example.com
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs email someone@example.com
 //   PRIVATE_KEY=0x... node examples/agent-client.mjs ip 1.2.3.4
 //
@@ -73,12 +72,6 @@ async function screenAddress(address) {
   console.log(JSON.stringify(result, null, 2));
 }
 
-async function screenWebsite(url) {
-  console.log(`Checking website "${url}" ($0.02)...`);
-  const result = await callPaid("/screen-website", { url });
-  console.log(JSON.stringify(result, null, 2));
-}
-
 async function screenEmail(email) {
   console.log(`Checking email "${email}" ($0.02)...`);
   const result = await callPaid("/screen-email", { email });
@@ -97,8 +90,6 @@ if (cmd === "screen" && args[0]) {
   await screenName(args[0]);
 } else if (cmd === "address" && args[0]) {
   await screenAddress(args[0]);
-} else if (cmd === "website" && args[0]) {
-  await screenWebsite(args[0]);
 } else if (cmd === "email" && args[0]) {
   await screenEmail(args[0]);
 } else if (cmd === "ip" && args[0]) {
@@ -107,7 +98,6 @@ if (cmd === "screen" && args[0]) {
   console.log("Usage:");
   console.log('  PRIVATE_KEY=0x... node examples/agent-client.mjs screen "Jane Doe"');
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs address 0x1234...");
-  console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs website example.com");
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs email someone@example.com");
   console.log("  PRIVATE_KEY=0x... node examples/agent-client.mjs ip 1.2.3.4");
   process.exit(1);

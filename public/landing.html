@@ -27,7 +27,7 @@
   "@type": "Service",
   "name": "PayPerScreen",
   "url": "https://payperscreen.com",
-  "description": "Pay-per-call sanctions, crypto-wallet, website, email, and IP risk screening API, priced in USDC and authenticated entirely by x402 micropayments — no account, no API key, no subscription.",
+  "description": "Pay-per-call sanctions, crypto-wallet, email, and IP risk screening API, priced in USDC and authenticated entirely by x402 micropayments — no account, no API key, no subscription.",
   "serviceType": "Sanctions, fraud, and risk screening API",
   "provider": { "@type": "Organization", "name": "PayPerScreen" },
   "areaServed": "Worldwide",
@@ -56,13 +56,6 @@
       "price": "0.02",
       "priceCurrency": "USD",
       "description": "Exact-match lookup against OFAC's sanctioned digital-currency address list."
-    },
-    {
-      "@type": "Offer",
-      "name": "Website trust check",
-      "price": "0.02",
-      "priceCurrency": "USD",
-      "description": "Deterministic composite of domain age, SSL certificate, certificate history, SPF, redirect behavior, security headers, and web-archive history."
     },
     {
       "@type": "Offer",
@@ -211,7 +204,7 @@
 <main class="layout">
  <div class="lede">
   <h2 class="headline">Screen anyone against global sanctions lists.</h2>
-  <p class="subhead">Or check a crypto wallet address, a website, an email
+  <p class="subhead">Or check a crypto wallet address, an email
      address, or an IP address for known risk signals. No account, no
      contract — pay per check and walk away with a timestamped record
      you can hand to an auditor.</p>
@@ -240,7 +233,6 @@
   <div class="modes">
    <button class="mode active" id="tab-name">Name</button>
    <button class="mode" id="tab-address">Wallet address</button>
-   <button class="mode" id="tab-website">Website</button>
    <button class="mode" id="tab-email">Email</button>
    <button class="mode" id="tab-ip">IP address</button>
   </div>
@@ -289,22 +281,6 @@
    <div class="price">Costs 2¢. Exact match against OFAC's sanctioned
     digital-currency address list.</div>
    <div id="err-address" class="err"></div>
-  </div>
-
-  <div id="card-website" style="display:none">
-   <label>Website address <span class="req">(required)</span></label>
-   <input id="website" placeholder="e.g. example.com">
-
-   <div class="examples">
-    <span class="ex" id="ex-website">Try an example site</span>
-   </div>
-
-   <button class="go" id="go-website">Check this website</button>
-   <div class="price">Costs 2¢. Seven free, zero-key signals &mdash;
-    domain age, SSL certificate, certificate history, email
-    authentication, redirects, security headers, and web-archive
-    history.</div>
-   <div id="err-website" class="err"></div>
   </div>
 
   <div id="card-email" style="display:none">
@@ -370,24 +346,22 @@ $("ex-hit").onclick=()=>{
  $("dob").value="1978-09-03"; $("type").value="Individual";
 };
 
-const TABS=["name","address","website","email","ip"];
+const TABS=["name","address","email","ip"];
 function showTab(active){
  TABS.forEach(t=>{
   $("tab-"+t).classList.toggle("active", t===active);
   $("card-"+t).style.display = t===active ? "" : "none";
  });
  $("result").innerHTML="";
- ["err","err-address","err-website","err-email","err-ip"].forEach(id=>{ if($(id)) $(id).textContent=""; });
+ ["err","err-address","err-email","err-ip"].forEach(id=>{ if($(id)) $(id).textContent=""; });
 }
 $("tab-name").onclick=()=>showTab("name");
 $("tab-address").onclick=()=>showTab("address");
-$("tab-website").onclick=()=>showTab("website");
 $("tab-email").onclick=()=>showTab("email");
 $("tab-ip").onclick=()=>showTab("ip");
 
 $("ex-addr-clean").onclick=()=>{ $("address").value="1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"; };
 $("ex-addr-hit").onclick=()=>{ $("address").value="123WBUDmSJv4GctdVEz6Qq6z8nXSKrJ4KX"; };
-$("ex-website").onclick=()=>{ $("website").value="google.com"; };
 $("ex-email").onclick=()=>{ $("email").value="info@google.com"; };
 // A known Tor exit node or blocklisted IP would make a better "hit"
 // example, but both lists rotate constantly — a hardcoded one would go
@@ -519,38 +493,6 @@ function riskBanner(b, subject){
  }
  return html;
 }
-
-$("go-website").onclick=async()=>{
- const url=$("website").value.trim();
- $("err-website").textContent="";
- if(!url){$("err-website").textContent="Enter a website to check.";return;}
-
- $("go-website").disabled=true; $("go-website").textContent="Checking… paying as it goes.";
- $("result").innerHTML="";
-
- try{
-  const res=await fetch("/api/check-website",{method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({url})});
-  const r=await res.json();
-
-  if(!r.ok){$("err-website").textContent=r.error||"Something went wrong.";return;}
-
-  const b=r.check;
-  const ms=r.ledger.lines.slice(-1)[0]?.ms ?? 0;
-
-  $("result").innerHTML=riskBanner(b, b.domain)
-   +'<div class="card">'+signalsTable(b.signals)
-   +'<div class="meta">'+esc(b.note)+'</div></div>'
-   +'<div class="card">'
-   +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'
-   +'<div class="kv"><span>Cost</span><b>2&cent; &middot; '+ms+' ms</b></div></div>';
- } catch(e){
-  $("err-website").textContent=String(e);
- } finally {
-  $("go-website").disabled=false; $("go-website").textContent="Check this website";
- }
-};
 
 $("go-email").onclick=async()=>{
  const email=$("email").value.trim();

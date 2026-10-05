@@ -1,6 +1,6 @@
 # PayPerScreen
 
-> Pay-per-call sanctions, crypto-wallet, website, email, and IP risk
+> Pay-per-call sanctions, crypto-wallet, email, and IP risk
 > screening API, priced in USDC and paid over [x402](https://x402.org) — no
 > account, no API key, no subscription. Every request is authenticated by a
 > signed on-chain payment at the moment it's made, on Base mainnet. Built
@@ -11,7 +11,7 @@ PayPerScreen checks names against the OFAC Specially Designated Nationals
 (SDN) list (fuzzy match) and crypto wallet addresses against OFAC's
 sanctioned digital-currency address list (exact match). It also runs
 deterministic trust/risk composites — no LLM calls anywhere in the scoring
-path — against websites, email addresses, and IP addresses, each returning
+path — against email addresses and IP addresses, each returning
 a riskLevel (low/medium/high) and a redFlag when a severe signal fires. It
 returns results and signals — it does not make compliance decisions for
 you.
@@ -49,8 +49,6 @@ call the API — only to send a query, not to pay for gas.
 - `GET /context` — $0.05 — field-by-field comparison for a prior hit
 - `GET /screen-address` — $0.02 — exact match against OFAC's sanctioned
   crypto-address list
-- `GET /screen-website` — $0.02 — domain age, SSL cert, certificate
-  history, SPF, redirects, security headers, web-archive history
 - `GET /screen-email` — $0.02 — mail-server validity, disposable-domain
   check, domain age, mailbox verification, blocklist status, typo-squat
 - `GET /screen-ip` — $0.01 (beta) — Spamhaus ZEN blocklist and Tor
