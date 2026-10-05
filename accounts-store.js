@@ -115,9 +115,17 @@ const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — shorter than
 // Constant-time comparison so a wrong guess can't be timed to learn how
 // many leading characters it got right.
 export function checkAdminCode(code) {
-  const expected = process.env.ADMIN_CODE;
-  if (!expected) return false; // no code configured = admin login disabled entirely
-  const a = Buffer.from(String(code || ""));
+  // Forgiving about the usual paste mistakes (stray space/newline, wrapping
+  // quotes) on the env var side, and about whitespace on the typed side —
+  // the comparison itself stays constant-time.
+  const clean = (v) => String(v ?? "").trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+  const expected = clean(process.env.ADMIN_CODE);
+  if (!expected) {
+    // Disabled entirely — say why in the server log (not to the caller).
+    console.warn("Admin login attempted but ADMIN_CODE is not set on this service.");
+    return false;
+  }
+  const a = Buffer.from(clean(code));
   const b = Buffer.from(expected);
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
