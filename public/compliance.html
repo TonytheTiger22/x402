@@ -192,4 +192,5 @@ $("b-clean").onclick=()=>run("clean");
 $("b-hit").onclick=()=>run("hit");
 $("b-reset").onclick=async()=>{ledger(await post("/api/reset"));$("stage").innerHTML="";cur=null;};
 fetch("/api/ledger").then(r=>r.json()).then(ledger);
-</script></body></html>
+</script><script src="/nav.js"></script>
+</body></html>
