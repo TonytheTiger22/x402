@@ -159,6 +159,16 @@
  .pm.active{border-color:var(--ink);color:var(--ink)}
  #wallet-status{font-weight:400}
  #wallet-status button{font:inherit;color:var(--link);background:none;border:0;cursor:pointer;padding:0 0 0 6px;text-decoration:underline}
+ .credit{border:1px solid var(--rule);padding:12px 14px;margin:-6px 0 18px;font:400 13.5px/1.5 var(--sans);color:var(--dim)}
+ .credit .bal{font:700 17px var(--serif);color:var(--ink)}
+ .credit .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+ .credit .amt{font:600 13px var(--sans);padding:6px 11px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);cursor:pointer;border-radius:0}
+ .credit .amt:hover{border-color:var(--ink)}
+ .credit .amt:disabled{opacity:.5;cursor:default}
+ .credit input{width:90px;padding:6px 8px;font:500 13px var(--sans)}
+ .credit .lnk{font:inherit;color:var(--link);background:none;border:0;cursor:pointer;padding:0;text-decoration:underline}
+ .credit .e{color:var(--warn);font-weight:500}
+ .credit .ok{color:var(--ink);font-weight:500}
  .wm-back{position:fixed;inset:0;background:rgba(26,26,24,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
  .wm{background:var(--paper);border:1px solid var(--ink);max-width:380px;width:100%;padding:22px 22px 18px}
  .wm h3{font:700 20px var(--serif);margin:0 0 4px}
@@ -259,8 +269,10 @@
    <span>Who pays:</span>
    <button class="pm active" id="pm-site" title="The site pays the API from its own wallet">We cover it (demo)</button>
    <button class="pm" id="pm-wallet" title="Pay per check in USDC on Base from your own wallet">My wallet (USDC on Base)</button>
+   <button class="pm" id="pm-balance" title="Top up once in USDC, then checks are deducted with no wallet popup">Prepaid balance</button>
    <span id="wallet-status"></span>
   </div>
+  <div class="credit" id="credit-panel" style="display:none"></div>
 
   <div id="card-name">
    <label>Full name <span class="req">(required)</span></label>
@@ -402,7 +414,7 @@ $("ex-email").onclick=()=>{ $("email").value="info@google.com"; };
 $("ex-ip").onclick=()=>{ $("ip").value="1.1.1.1"; };
 
 // ---------- who pays: the site (demo) or the visitor's own wallet ----------
-let PAY_MODE="site", walletLoaded=null;
+let PAY_MODE="site", walletLoaded=null, afterConnect=null;
 function loadWalletLib(){
  if(walletLoaded) return walletLoaded;
  walletLoaded=new Promise((ok,bad)=>{
@@ -417,7 +429,10 @@ function setMode(m){
  PAY_MODE=m;
  $("pm-site").classList.toggle("active",m==="site");
  $("pm-wallet").classList.toggle("active",m==="wallet");
- if(m==="site") $("wallet-status").textContent="";
+ $("pm-balance").classList.toggle("active",m==="balance");
+ if(m!=="wallet") $("wallet-status").textContent="";
+ $("credit-panel").style.display=m==="balance"?"":"none";
+ if(m==="balance") renderCredits();
 }
 async function refreshWalletStatus(){
  const w=window.PPSWallet; if(!w||!w.address){ $("wallet-status").textContent=""; return; }
@@ -453,14 +468,16 @@ async function pickWallet(w){
  try{
   await window.PPSWallet.connect(w.id);
   window.PPSWallet.onChange(refreshWalletStatus);
-  closeModal(); setMode("wallet"); await refreshWalletStatus();
+  closeModal();
+  if(afterConnect){ const f=afterConnect; afterConnect=null; await f(); }
+  else { setMode("wallet"); await refreshWalletStatus(); }
  }catch(e){
   $("wm-list").querySelectorAll("button.w").forEach(b=>b.disabled=false);
   $("wm-err").textContent=/reject|denied|4001/i.test(e.message||"")?"Connection cancelled in the wallet.":"Couldn't connect: "+(e.message||e);
  }
 }
-$("wm-close").onclick=closeModal;
-$("wm-back").onclick=(e)=>{ if(e.target.id==="wm-back") closeModal(); };
+$("wm-close").onclick=()=>{ afterConnect=null; closeModal(); };
+$("wm-back").onclick=(e)=>{ if(e.target.id==="wm-back"){ afterConnect=null; closeModal(); } };
 function useWallet(){
  if(window.PPSWallet&&window.PPSWallet.address){ setMode("wallet"); refreshWalletStatus(); } // already connected
  else openWalletModal();
@@ -468,9 +485,97 @@ function useWallet(){
 $("pm-site").onclick=()=>setMode("site");
 $("pm-wallet").onclick=useWallet;
 
+// ---------- prepaid balance: top up once, then checks deduct with no popup ----------
+let CREDITS={signedIn:false,balanceUsd:0,limits:{min:1.25,max:250},topupsEnabled:true}, creditMsg="";
+const usd=(n)=>"$"+Number(n||0).toFixed(2);
+async function loadCredits(){ try{ CREDITS=await (await fetch("/api/credits")).json(); }catch{} return CREDITS; }
+function withWallet(next){   // run `next` once a wallet is connected (opens the picker if needed)
+ if(window.PPSWallet&&window.PPSWallet.address) return next();
+ afterConnect=next; openWalletModal();
+}
+async function signInCredits(){
+ creditMsg='<span>Check your wallet: sign the sign-in message (it moves no funds).</span>'; renderCredits();
+ try{
+  const n=await (await fetch("/api/credits/nonce")).json();
+  const sig=await window.PPSWallet.signMessage(n.message);
+  const r=await (await fetch("/api/credits/login",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({address:window.PPSWallet.address,message:n.message,signature:sig})})).json();
+  if(!r.ok) throw new Error(r.error||"Sign-in failed");
+  creditMsg=""; await loadCredits(); setMode("balance");
+ }catch(e){
+  creditMsg='<span class="e">'+esc(/reject|denied|4001|cancel/i.test(e.message||"")?"Sign-in cancelled in the wallet.":(e.message||e))+'</span>';
+  renderCredits();
+ }
+}
+async function useBalance(){
+ await loadCredits(); setMode("balance");
+}
+function renderCredits(){
+ const c=CREDITS, el=$("credit-panel");
+ if(!c.signedIn){
+  el.innerHTML='Top up once in USDC on Base (from '+usd(c.limits.min)+', about &euro;1), then each check is deducted from your balance '
+   +'&mdash; no wallet popup per check. Your balance belongs to your wallet address.'
+   +'<div class="row"><button class="amt" id="cr-signin">Sign in with my wallet</button></div>'
+   +(creditMsg?'<div class="row">'+creditMsg+'</div>':'');
+  $("cr-signin").onclick=()=>withWallet(signInCredits);
+  return;
+ }
+ const amts=[c.limits.min,5,10,25].filter((v,i,a)=>v>=c.limits.min&&a.indexOf(v)===i);
+ el.innerHTML='<span class="bal">'+usd(c.balanceUsd)+'</span> prepaid &middot; wallet '+esc(short(c.address))
+  +' &middot; about '+Math.floor((c.balanceUsd+1e-9)/0.02)+' name checks'
+  +' <button class="lnk" id="cr-out">Sign out</button>'
+  +(c.topupsEnabled
+    ?'<div class="row">Top up: '+amts.map(a=>'<button class="amt" data-a="'+a+'">'+usd(a)+'</button>').join("")
+      +'<input id="cr-custom" type="number" min="'+c.limits.min+'" max="'+c.limits.max+'" step="0.01" placeholder="other">'
+      +'<button class="amt" id="cr-custom-go">Top up</button></div>'
+      +'<div class="row" style="font-size:12.5px">One USDC payment signed in your wallet. Your wallet may show a security warning because our receiving address is new. Credits are only usable for checks on this site and are non-refundable.</div>'
+    :'<div class="row e">Top-ups are temporarily unavailable.</div>')
+  +(creditMsg?'<div class="row">'+creditMsg+'</div>':'');
+ el.querySelectorAll("button[data-a]").forEach(b=>b.onclick=()=>topUp(+b.dataset.a));
+ const cg=$("cr-custom-go"); if(cg) cg.onclick=()=>topUp(+$("cr-custom").value);
+ $("cr-out").onclick=async()=>{ await fetch("/api/credits/logout",{method:"POST"}); creditMsg=""; await loadCredits(); renderCredits(); };
+}
+function topUp(amount){
+ const c=CREDITS;
+ if(!(amount>=c.limits.min)){ creditMsg='<span class="e">The minimum top-up is '+usd(c.limits.min)+'.</span>'; return renderCredits(); }
+ if(amount>c.limits.max){ creditMsg='<span class="e">The maximum top-up is '+usd(c.limits.max)+'.</span>'; return renderCredits(); }
+ withWallet(async()=>{
+  setMode("balance");
+  const w=window.PPSWallet;
+  creditMsg='<span>Waiting for your wallet to sign a '+usd(amount)+' USDC payment…</span>'; renderCredits();
+  el_disable(true);
+  try{
+   try{ const bal=await w.usdcBalance(); if(bal<amount) throw new Error("Not enough USDC on Base: your wallet has "+bal.toFixed(2)+" USDC."); }
+   catch(e){ if(/Not enough USDC/.test(e.message)) throw e; }
+   const res=await w.payFetch(amount)("/api/topup",{method:"POST",headers:{"Content-Type":"application/json","X-Pay-Mode":"wallet"},body:JSON.stringify({amount})});
+   if(res.status===402) throw new Error("The payment wasn't accepted, so nothing was charged.");
+   const r=await res.json();
+   if(!r.ok) throw new Error(r.error||"Top-up failed");
+   await loadCredits();
+   creditMsg='<span class="ok">Added '+usd(r.credited)+'.</span>'
+     +(r.tx?' <a href="https://basescan.org/tx/'+esc(r.tx)+'" target="_blank" rel="noopener">receipt &#8599;</a>':'')
+     +(r.note?' <span class="e">'+esc(r.note)+'</span>':'');
+  }catch(e){
+   const m=String(e.message||e);
+   creditMsg='<span class="e">'+esc(/reject|denied|4001|cancel/i.test(m)?"You declined the payment in your wallet. Nothing was charged.":m)+'</span>';
+  }
+  renderCredits();
+ });
+}
+function el_disable(on){ $("credit-panel").querySelectorAll("button").forEach(b=>b.disabled=on); }
+$("pm-balance").onclick=useBalance;
+
 // POST JSON; in wallet mode the visitor's wallet signs the payment (x402) and we
 // check their USDC balance first so a short balance gives a clear message.
 async function post(url, body, needUsd){
+ if(PAY_MODE==="balance"){
+  if(!CREDITS.signedIn) throw new Error("Sign in with your wallet to use your prepaid balance (see above).");
+  if(needUsd && CREDITS.balanceUsd+1e-9<needUsd) throw new Error("Not enough prepaid balance: this costs "+Math.round(needUsd*100)+"¢ and you have "+usd(CREDITS.balanceUsd)+". Top up above.");
+  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-Pay-Mode":"balance"},body:JSON.stringify(body)});
+  const r=await res.json();
+  await loadCredits(); renderCredits();
+  return r;
+ }
  if(PAY_MODE!=="wallet"){
   const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   return res.json();
@@ -494,6 +599,7 @@ async function post(url, body, needUsd){
  return r;
 }
 
+const ctxLabel=()=>"Get the field comparison &mdash; 5&cent; "+(PAY_MODE==="balance"?"from your balance":"from your wallet");
 const STATUS_TAG={match:['y','agrees'],partial:['p','partial'],differs:['n','differs'],unknown:['u','no data']};
 function comparisonTable(fields){
  const rows=fields.map(f=>{
@@ -551,8 +657,8 @@ $("go").onclick=async()=>{
    $("result").innerHTML='<div class="banner warn">Possible match &mdash; '
      +esc(r.screen.hits[0].name)+', '+esc(r.screen.hits[0].list)+', score '+r.screen.hits[0].score+'</div>'
     +'<div class="card" id="ctx-slot">'+(r.context?contextHtml(r.context)
-      :'<button class="go" id="get-context" style="margin-top:4px">Get the field comparison &mdash; 5&cent; from your wallet</button>'
-       +'<div class="price">A second payment, signed in your wallet. Compares what you entered against the listed party.</div>'
+      :'<button class="go" id="get-context" style="margin-top:4px">'+ctxLabel()+'</button>'
+       +'<div class="price">'+(PAY_MODE==="balance"?'Deducted from your prepaid balance.':'A second payment, signed in your wallet.')+' Compares what you entered against the listed party.</div>'
        +'<div id="ctx-err" class="err"></div>')+'</div>'
     +'<div class="card">'
     +'<div class="kv"><span>Check reference</span><b><code>'+esc(r.record.reference)+'</code></b></div>'+txRow(r)
@@ -561,13 +667,13 @@ $("go").onclick=async()=>{
     +'&mdash; clear, escalate, hold a payment &mdash; is entirely your own process.</div></div>';
    const gc=$("get-context");
    if(gc) gc.onclick=async()=>{
-    gc.disabled=true; gc.textContent="Waiting for your wallet…"; $("ctx-err").textContent="";
+    gc.disabled=true; gc.textContent=PAY_MODE==="balance"?"Working…":"Waiting for your wallet…"; $("ctx-err").textContent="";
     try{
      const c=await post("/api/wallet-context",{name, country:$("country").value.trim(),
                                                dob:$("dob").value, type:$("type").value}, 0.05);
      if(!c.ok) throw new Error(c.error||"Couldn't get the comparison.");
      $("ctx-slot").innerHTML=contextHtml(c.context)+'<div class="card">'+txRow(c,"Payment (comparison)")+'</div>';
-    }catch(e){ $("ctx-err").textContent=String(e.message||e); gc.disabled=false; gc.innerHTML="Get the field comparison &mdash; 5&cent; from your wallet"; }
+    }catch(e){ $("ctx-err").textContent=String(e.message||e); gc.disabled=false; gc.innerHTML=ctxLabel(); }
    };
   }
  } catch(e){

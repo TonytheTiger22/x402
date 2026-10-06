@@ -70,7 +70,9 @@ async function usdcBalance() {
 }
 
 // fetch() that answers a 402 by signing with the connected wallet and retrying.
-function payFetch() {
+// maxUsd caps what this fetch may authorise (the x402 client's own default cap
+// is $1, which a top-up can exceed); per-check calls keep the default.
+function payFetch(maxUsd) {
   if (!provider || !address) throw new Error("Connect a wallet first");
   const wc = createWalletClient({ chain: base, transport: custom(provider) });
   const signer = {
@@ -79,11 +81,20 @@ function payFetch() {
   };
   const client = new x402Client();
   client.register("eip155:*", new ExactEvmScheme(signer));
+  if (maxUsd) client.setSpendControls({ maxAmountPerPayment: "$" + Number(maxUsd).toFixed(2) });
   return wrapFetchWithPayment(fetch.bind(window), client);
 }
 
+// Plain personal_sign of a text message (used to sign in to a prepaid balance).
+// Moves nothing and approves nothing.
+async function signMessage(message) {
+  if (!provider || !address) throw new Error("Connect a wallet first");
+  const wc = createWalletClient({ chain: base, transport: custom(provider) });
+  return wc.signMessage({ account: address, message });
+}
+
 window.PPSWallet = {
-  listWallets, connect, disconnect, usdcBalance, payFetch,
+  listWallets, connect, disconnect, usdcBalance, payFetch, signMessage,
   get address() { return address; },
   onChange(cb) {
     provider?.on?.("accountsChanged", (a) => { address = a?.[0] || null; cb(); });
