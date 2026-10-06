@@ -488,7 +488,7 @@ app.post("/api/screen-free", async (req, res) => {
     }
 
     const context = await buyQuery("/context", { name, dob, country, type },
-                                    "Field comparison", 0.05);
+                                    "Field comparison", 0.05, req);
     res.json({ ok: true, outcome: "hit", screen: b, context: context.body,
                record: rec, ledger });
 
