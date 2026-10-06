@@ -266,9 +266,8 @@
   </div>
 
   <div class="paybar">
-   <span>Who pays:</span>
-   <button class="pm active" id="pm-site" title="The site pays the API from its own wallet">We cover it (demo)</button>
-   <button class="pm" id="pm-wallet" title="Pay per check in USDC on Base from your own wallet">My wallet (USDC on Base)</button>
+   <span>Pay with:</span>
+   <button class="pm active" id="pm-wallet" title="Pay per check in USDC on Base from your own wallet">My wallet (USDC on Base)</button>
    <button class="pm" id="pm-balance" title="Top up once in USDC, then checks are deducted with no wallet popup">Prepaid balance</button>
    <span id="wallet-status"></span>
   </div>
@@ -413,8 +412,8 @@ $("ex-email").onclick=()=>{ $("email").value="info@google.com"; };
 // stale. 1.1.1.1 is a stable, real public IP that should come back clean.
 $("ex-ip").onclick=()=>{ $("ip").value="1.1.1.1"; };
 
-// ---------- who pays: the site (demo) or the visitor's own wallet ----------
-let PAY_MODE="site", walletLoaded=null, afterConnect=null;
+// ---------- who pays: the visitor's own wallet, or their prepaid balance ----------
+let PAY_MODE="wallet", walletLoaded=null, afterConnect=null;
 function loadWalletLib(){
  if(walletLoaded) return walletLoaded;
  walletLoaded=new Promise((ok,bad)=>{
@@ -425,10 +424,10 @@ function loadWalletLib(){
  return walletLoaded;
 }
 const short=(a)=>a.slice(0,6)+"…"+a.slice(-4);
+// m: "wallet" (own wallet), "balance" (prepaid) or "none"
 function setMode(m){
- PAY_MODE=m;
- $("pm-site").classList.toggle("active",m==="site");
  $("pm-wallet").classList.toggle("active",m==="wallet");
+ PAY_MODE=m;
  $("pm-balance").classList.toggle("active",m==="balance");
  if(m!=="wallet") $("wallet-status").textContent="";
  $("credit-panel").style.display=m==="balance"?"":"none";
@@ -438,7 +437,7 @@ async function refreshWalletStatus(){
  const w=window.PPSWallet; if(!w||!w.address){ $("wallet-status").textContent=""; return; }
  let bal=""; try{ bal=" · "+(await w.usdcBalance()).toFixed(2)+" USDC"; }catch{}
  $("wallet-status").innerHTML=esc("Connected "+short(w.address)+bal+" · Base")+'<button id="wm-change">Change</button>';
- $("wm-change").onclick=()=>{ window.PPSWallet.disconnect(); setMode("site"); openWalletModal(); };
+ $("wm-change").onclick=()=>{ window.PPSWallet.disconnect(); setMode("none"); openWalletModal(); };
 }
 const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 function closeModal(){ $("wm-back").style.display="none"; }
@@ -482,7 +481,6 @@ function useWallet(){
  if(window.PPSWallet&&window.PPSWallet.address){ setMode("wallet"); refreshWalletStatus(); } // already connected
  else openWalletModal();
 }
-$("pm-site").onclick=()=>setMode("site");
 $("pm-wallet").onclick=useWallet;
 
 // ---------- prepaid balance: top up once, then checks deduct with no popup ----------
@@ -576,12 +574,9 @@ async function post(url, body, needUsd){
   await loadCredits(); renderCredits();
   return r;
  }
- if(PAY_MODE!=="wallet"){
-  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  return res.json();
- }
+ try{ await loadWalletLib(); }catch(e){ throw e; }
  const w=window.PPSWallet;
- if(!w||!w.address) throw new Error("Connect your wallet first.");
+ if(!w||!w.address){ openWalletModal(); throw new Error("Connect a wallet to pay for this check."); }
  try{ const bal=await w.usdcBalance();
       if(needUsd && bal<needUsd) throw new Error("Not enough USDC on Base: this costs "+Math.round(needUsd*100)+"¢ and your wallet has "+bal.toFixed(2)+" USDC."); }
  catch(e){ if(/Not enough USDC/.test(e.message)) throw e; /* balance read failed: let the payment attempt decide */ }

@@ -87,6 +87,15 @@ async function walletBuy(req, path, params, label, price) {
 async function buyQuery(path, params, label, price, req) {
   if (req && isWallet(req)) return walletBuy(req, path, params, label, price);
   if (req && isBalance(req)) return balanceBuy(req, path, params, label, price);
+  // The site's own wallet never pays for an anonymous visitor's check: only for a
+  // signed-in admin testing, or (via balanceBuy) after a prepaid balance was charged.
+  if (!req?.isAdmin) throw new Error("Connect a wallet, or sign in to your prepaid balance, to pay for this check.");
+  return siteBuy(path, params, label, price);
+}
+
+// Pays the API from the site's own wallet (BUYER_KEY). Callers must have been
+// authorised first (admin, or a prepaid balance charge) — see buyQuery/balanceBuy.
+async function siteBuy(path, params, label, price) {
   const t0 = Date.now();
   const qs = new URLSearchParams(params).toString();
   const r = await fetchWithPayment(`${API}${path}?${qs}`, { method: "GET" });
@@ -107,7 +116,7 @@ async function balanceBuy(req, path, params, label, price) {
   if (!address) { const e = new Error("Sign in with your wallet to use your prepaid balance."); e.code = "NO_CREDIT_SESSION"; throw e; }
   const chargeId = credits.charge(address, credits.toMicros(price), label);
   try {
-    const out = await buyQuery(path, params, label, price);   // site-wallet path
+    const out = await siteBuy(path, params, label, price);   // site-wallet path
     out.line = { ...out.line, payer: "prepaid balance" };
     return out;
   } catch (err) {
