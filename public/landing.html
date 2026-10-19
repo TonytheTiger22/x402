@@ -182,6 +182,11 @@
  .wm .sec{font:600 12px var(--sans);color:var(--dim);margin:16px 0 0;letter-spacing:.02em}
  .wm .close{display:block;margin:16px auto 0;font:500 13px var(--sans);color:var(--dim);background:none;border:0;cursor:pointer}
  .wm .e{color:var(--warn);font:500 13px var(--sans);margin-top:10px}
+ .samples{max-width:1080px;margin:0 auto;padding:8px 20px 56px}
+ .samples h2{font:700 26px/1.2 var(--serif);margin:0 0 6px;letter-spacing:-.01em}
+ .samples .sub{font:400 15px/1.5 var(--sans);color:var(--dim);margin:0 0 20px;max-width:62ch}
+ .samples .eg{font:600 12px var(--sans);color:var(--partial);letter-spacing:.04em;text-transform:uppercase;margin:0 0 10px}
+ .samples .panel{max-width:760px}
  .go{display:block;width:100%;background:var(--ink);color:var(--paper);border:0;
      border-radius:0;padding:14px 18px;font:600 15.5px var(--sans);margin-top:22px}
  .go:hover{background:#000}
@@ -352,6 +357,19 @@
   <div id="result" class="result"></div>
  </div>
 </main>
+
+<section class="samples" id="samples" aria-labelledby="samples-h">
+ <h2 id="samples-h">What a result looks like</h2>
+ <p class="sub">Four real result shapes, with made-up subjects, so you can see what a check returns before you pay.
+    Nothing here is a live check &mdash; yours run against the current data and cost 1&ndash;7&cent;.</p>
+ <div class="modes" id="sample-tabs">
+  <button class="mode active" data-s="name">Name match</button>
+  <button class="mode" data-s="address">Wallet address</button>
+  <button class="mode" data-s="email">Email</button>
+  <button class="mode" data-s="ip">IP address</button>
+ </div>
+ <div class="panel" id="sample-panel"></div>
+</section>
 
 <div class="colophon">
  <p>Every check above is a real, working payment, not a mockup — it just
@@ -797,6 +815,48 @@ $("go-ip").onclick=async()=>{
   $("go-ip").disabled=false; $("go-ip").textContent="Check this IP";
  }
 };
+
+// ---------- sample results (static, clearly labelled; reuse the live renderers) ----------
+const SAMPLES={
+ name:()=>'<div class="banner warn">Possible match &mdash; Viktor PETROV, OFAC SDN, score 0.87</div>'
+  +'<div class="card">'+comparisonTable([
+    {field:"Name",subject:"Viktor Petrov",listed:"Viktor PETROV",status:"match",note:"matched on primary name"},
+    {field:"Date of birth",subject:"1978-09-03",listed:"1965-01-22",status:"differs",note:"differs"},
+    {field:"Nationality",subject:"Bulgaria",listed:"Russian Federation",status:"differs",note:"differs"},
+    {field:"Entity type",subject:"Individual",listed:"Individual",status:"match",note:"exact match"}])
+  +'<div class="meta">OFAC SDN &middot; UKRAINE-EO14024 &middot; matched on: primary name</div></div>'
+  +'<div class="card"><div class="meta">How to read it: the name matches but the date of birth and nationality do not, so this is probably a different person. '
+  +'We report the evidence; whether to clear or escalate is your call. Cost: 7&cent; (2&cent; match + 5&cent; field comparison).</div></div>',
+ address:()=>'<div class="banner warn">Match &mdash; on OFAC&rsquo;s sanctioned digital-currency address list (XBT)</div>'
+  +'<div class="card"><div class="kv"><span>Address</span><b style="word-break:break-all">123WBUDmSJv4GctdVEz6Qq6z8nXSKrJ4KX</b></div>'
+  +'<div class="kv"><span>Cost</span><b>2&cent;</b></div>'
+  +'<div class="meta">Exact address match only &mdash; this source has no linked entity name, DOB, or program per address. &ldquo;Not sanctioned&rdquo; reflects this list only, not a guarantee the address is clean.</div></div>',
+ email:()=>riskBanner({riskLevel:"medium",redFlag:false,redFlagSignals:[],flagCount:2,unknownCount:1},"accounts@northwind-supply.example")
+  +'<div class="card">'+signalsTable([
+   {label:"Syntax and mail server",status:"pass",detail:"Valid syntax; a mail server accepts mail for this domain."},
+   {label:"Disposable email provider",status:"pass",detail:"Not a known throwaway-mailbox provider."},
+   {label:"Provider type",status:"pass",detail:"Business domain, not a free-mail provider."},
+   {label:"Domain registration age",status:"flag",detail:"Registered 11 days ago. Very new domains carry more risk."},
+   {label:"Domain certificate history",status:"pass",detail:"Certificates have been issued for this domain."},
+   {label:"Mailbox verification",status:"unknown",detail:"The server accepts every address, so this mailbox can't be confirmed."},
+   {label:"Mail server reputation (DNSBL)",status:"pass",detail:"Not listed on the Spamhaus blocklist."},
+   {label:"Mail provider",status:"pass",detail:"Hosted mail (Google Workspace)."},
+   {label:"Look-alike domain check",status:"pass",detail:"No close match to a well-known domain."},
+   {label:"Account type",status:"flag",detail:"Role account (accounts@), a shared mailbox rather than a named person."}])
+  +'<div class="meta">Ten signals; unknown is never counted as a pass. Critical flags set a red flag on their own; minor ones add up. Cost: 2&cent;.</div></div>',
+ ip:()=>riskBanner({riskLevel:"high",redFlag:true,redFlagSignals:["Tor exit node"],flagCount:1,unknownCount:0},"198.51.100.23")
+  +'<div class="card">'+signalsTable([
+   {label:"Blocklist status (Spamhaus ZEN)",status:"pass",detail:"Not listed."},
+   {label:"Tor exit node",status:"flag",detail:"Listed as an active Tor exit node."},
+   {label:"Network allocation",status:"pass",detail:"Allocated to a hosting provider (informational; not scored)."}])
+  +'<div class="meta">Tor traffic isn&rsquo;t proof of fraud, but it hides the real origin, so it&rsquo;s a red flag for you to weigh. IPv4 only for now. Cost: 1&cent;.</div></div>'
+};
+function showSample(k){
+ document.querySelectorAll("#sample-tabs .mode").forEach(b=>b.classList.toggle("active",b.dataset.s===k));
+ $("sample-panel").innerHTML='<div class="eg">Example &mdash; not a live check</div>'+SAMPLES[k]();
+}
+document.querySelectorAll("#sample-tabs .mode").forEach(b=>b.onclick=()=>showSample(b.dataset.s));
+showSample("name");
 </script>
 <script src="/nav.js"></script>
 </body></html>
